@@ -26,6 +26,12 @@ def wait(fn, seconds=40):
         except Exception as exc:
             last = exc
         time.sleep(.35)
+    try:
+        print(adb("shell","dumpsys","window","windows").split("mCurrentFocus=")[-1][:180],flush=True)
+        adb("shell","uiautomator","dump","/sdcard/failure.xml")
+        print(adb("shell","cat","/sdcard/failure.xml")[:1800],flush=True)
+    except Exception:
+        pass
     raise AssertionError(f"Timed out waiting for {fn}: {last}")
 
 def start():
@@ -36,6 +42,8 @@ def start():
     target=next((t for t in targets if t.get("url","").startswith("https://genesis.invalid/")),targets[0])
     return websocket.create_connection(target["webSocketDebuggerUrl"], suppress_origin=True,timeout=20)
 
+adb("shell","settings","put","secure","immersive_mode_confirmations","confirmed")
+adb("shell","wm","dismiss-keyguard")
 ws = start()
 def call(method, **params):
     ws.send(json.dumps({"id":1,"method":method,"params":params}))
