@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.22.1)
+project(alien_core LANGUAGES CXX)
+add_library(alien_core SHARED core.cpp guest.cpp pe.cpp)
+target_compile_features(alien_core PRIVATE cxx_std_20)
+target_link_libraries(alien_core PRIVATE android log vulkan)
