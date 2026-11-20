@@ -57,7 +57,7 @@ def click(selector):
 def shot(name):
     (OUT/name).write_bytes(subprocess.check_output(["adb","exec-out","screencap","-p"]))
 
-def node_click(label):
+def node_click(label, seconds=18):
     def locate():
         adb("shell","uiautomator","dump","/sdcard/window.xml")
         xml=ET.fromstring(adb("shell","cat","/sdcard/window.xml"))
@@ -65,12 +65,22 @@ def node_click(label):
             if node.get("text","").lower()==label.lower() or node.get("content-desc","").lower()==label.lower():
                 x,y,u,v=map(int,re.findall(r"\d+",node.get("bounds")))
                 adb("shell","input","tap",str((x+u)//2),str((y+v)//2));return True
-    wait(locate,18)
+    wait(locate,seconds)
 
 def select_download(filename):
     time.sleep(1)
-    node_click("Show roots")
-    node_click("Downloads")
+    # Wide screens can expose the roots pane permanently. The picker can
+    # also reopen the folder selected during the previous import.
+    try:
+        node_click(filename,3)
+        return
+    except AssertionError:
+        pass
+    try:
+        node_click("Downloads",3)
+    except AssertionError:
+        node_click("Show roots")
+        node_click("Downloads")
     node_click(filename)
     time.sleep(1)
 
@@ -111,4 +121,25 @@ wait(lambda:js("document.querySelector('#dialogbody').textContent.includes('MZ h
 click('#closeModal')
 click("nav [data-page=Diagnostics]")
 assert js("data.logs.length>=3")
+click("nav [data-page=Library]")
+js("let search=document.querySelector('#search');search.value='fixture';search.dispatchEvent(new Event('input',{bubbles:true}))")
+assert js("document.querySelectorAll('#games .tile').length===1")
+click('[data-act=view]')
+assert js("document.querySelector('#games').classList.contains('list')")
+click('[data-detail]:not([data-detail=doors])')
+adb("push","app/src/main/assets/portals.webp","/sdcard/Download/Genesis-cover.webp")
+adb("shell","am","broadcast","-a","android.intent.action.MEDIA_SCANNER_SCAN_FILE","-d","file:///sdcard/Download/Genesis-cover.webp")
+click("[data-act=art]")
+select_download("Genesis-cover.webp")
+wait(lambda:js("game().art>0"))
+click("nav [data-page=Controller]")
+click('[data-act=bind][data-key=Confirm]')
+adb("shell","input","gamepad","keyevent","KEYCODE_BUTTON_X")
+wait(lambda:js("prefs.mapping.Confirm==='BUTTON_X'"))
+click("nav [data-page=Diagnostics]")
+click("[data-act=export]")
+time.sleep(1)
+node_click("Save")
+wait(lambda: js("document.querySelector('#toast').textContent.includes('exported')"))
+print("PASS: artwork import, virtual gamepad mapping, report export, search and list view.")
 print("PASS: landscape, all destinations, touch, JNI execution, favorites, theme restart, Android document selection, imported execution and invalid-file handling.")

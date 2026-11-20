@@ -89,10 +89,14 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: alien-xbox-genesis-arm64-debug
+      - uses: actions/download-artifact@v4
+        with:
+          name: alien-teal-android-screenshots
+          path: screenshots
       - name: Publish verified APK
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           mv app-debug.apk ALIEN-XBOX-0.3.0-arm64-debug.apk
-          gh release create v0.3.0 ALIEN-XBOX-0.3.0-arm64-debug.apk --target "$GITHUB_SHA" --title "Alien Teal Ultimate 0.3.0" --notes "Android ARM64 debug build with the Genesis homebrew engine. Xbox retail games are unsupported."
+          gh release create v0.3.0 ALIEN-XBOX-0.3.0-arm64-debug.apk screenshots/dashboard.png screenshots/execution.png --target "$GITHUB_SHA" --title "Alien Teal Ultimate 0.3.0" --notes "Android ARM64 debug build with the Genesis homebrew engine. Xbox retail games are unsupported."

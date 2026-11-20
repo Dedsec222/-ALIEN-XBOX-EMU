@@ -9,7 +9,8 @@ const stamp=n=>new Date(n).toLocaleString();
 const bytes=n=>n>=1048576?(n/1048576).toFixed(1)+' MiB':(n/1024).toFixed(1)+' KiB';
 const gib=n=>(n/1073741824).toFixed(1);
 const base=JSON.parse(Genesis.snapshot());
-let prefs=Object.assign({theme:'teal',motion:true,haptic:true,large:false,compact:base.compact,view:'grid',favorites:[],budget:100000,sort:'name',mapping:{}},JSON.parse(localStorage.getItem('preferences')||'{}'));
+function readPreferences(){try{return JSON.parse(localStorage.getItem('preferences')||'{}')||{};}catch(error){return {};}}
+let prefs=Object.assign({theme:'teal',motion:true,haptic:true,large:false,compact:base.compact,view:'grid',favorites:[],budget:100000,sort:'name',mapping:{}},readPreferences());
 let data=base, metrics=JSON.parse(Genesis.metrics()), page='Dashboard', selected='doors',filter='all',query='',busy=false,bind='',lastKey='',timer;
 const historyStack=[];
 const main=$('#main'),dialog=$('#modal');
