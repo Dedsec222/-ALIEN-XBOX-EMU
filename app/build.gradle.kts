@@ -7,8 +7,8 @@ android {
   applicationId = "com.dedsec.alienxbox"
   minSdk = 26
   targetSdk = 35
-  versionCode = 2
-  versionName = "0.2.0"
+  versionCode = 3
+  versionName = "0.2.1"
   ndk { abiFilters += "arm64-v8a" }
   externalNativeBuild { cmake { arguments += listOf("-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON", "-DANDROID_STL=c++_static") } }
  }
