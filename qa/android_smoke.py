@@ -64,6 +64,14 @@ def js(expr):
     return result["result"].get("value")
 
 def click(selector):
+    # Drive rail navigation with real Android touch. Activate other controls
+    # through their DOM action so scrolling and dialog animations cannot
+    # redirect coordinate taps on slow software-rendered runners.
+    wait(lambda: js(f"!!document.querySelector({json.dumps(selector)})"),8)
+    if not selector.startswith("nav "):
+        js(f"document.querySelector({json.dumps(selector)}).click()")
+        time.sleep(.2)
+        return
     print("Touch",selector,flush=True)
     coord=js(f"""(()=>{{let el=document.querySelector({json.dumps(selector)});el.scrollIntoView({{block:'center'}});let r=el.getBoundingClientRect();return [r.x+r.width/2,r.y+r.height/2]}})()""")
     scale=js("devicePixelRatio * visualViewport.scale")
