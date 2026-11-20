@@ -19,6 +19,9 @@ int main() {
     }
     for (size_t size = 0; size < file.size(); ++size)
         assert(genesis::loadPe(std::span(file).first(size)).error);
+    auto invalid = file;
+    invalid[60] = invalid[61] = invalid[62] = invalid[63] = 0xff;
+    assert(genesis::loadPe(invalid).error);
     file[0] = 0;
     assert(genesis::loadPe(file).error);
     std::cout << "All nine door/target combinations and truncated files passed.\n";
