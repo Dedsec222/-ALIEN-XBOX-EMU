@@ -65,14 +65,17 @@ jobs:
           sudo udevadm trigger --name-match=kvm
       - uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 33
+          api-level: 35
           arch: x86_64
           target: google_apis
           profile: pixel_6
           ram-size: 2048M
-          emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -feature -Vulkan -camera-back none
+          emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -gpu software -feature -Vulkan -camera-back none
           disable-animations: true
           script: |
+            adb shell wm size 800x1520
+            adb shell wm density 320
+            adb shell wm user-rotation lock 1
             adb install app/build/outputs/apk/debug/app-debug.apk
             python qa/android_smoke.py
       - uses: actions/upload-artifact@v4

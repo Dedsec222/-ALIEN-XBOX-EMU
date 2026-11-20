@@ -33,7 +33,8 @@ def start():
     pid = wait(lambda: adb("shell","pidof",APP))
     adb("forward","tcp:9222","localabstract:webview_devtools_remote_"+pid)
     targets = wait(lambda: json.load(urllib.request.urlopen("http://localhost:9222/json",timeout=2)))
-    return websocket.create_connection(targets[0]["webSocketDebuggerUrl"], suppress_origin=True,timeout=10)
+    target=next((t for t in targets if t.get("url","").startswith("https://genesis.invalid/")),targets[0])
+    return websocket.create_connection(target["webSocketDebuggerUrl"], suppress_origin=True,timeout=20)
 
 ws = start()
 def call(method, **params):
@@ -45,7 +46,12 @@ def call(method, **params):
             return response["result"]
 
 def js(expr):
-    result=call("Runtime.evaluate",expression=expr,returnByValue=True)
+    global ws
+    try:
+        result=call("Runtime.evaluate",expression=expr,returnByValue=True)
+    except websocket.WebSocketConnectionClosedException:
+        ws=start()
+        result=call("Runtime.evaluate",expression=expr,returnByValue=True)
     if "exceptionDetails" in result: raise AssertionError(result["exceptionDetails"])
     return result["result"].get("value")
 
