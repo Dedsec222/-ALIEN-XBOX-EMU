@@ -50,13 +50,17 @@ def js(expr):
     return result["result"].get("value")
 
 def click(selector):
+    print("Touch",selector,flush=True)
     coord=js(f"""(()=>{{let el=document.querySelector({json.dumps(selector)});el.scrollIntoView({{block:'center'}});let r=el.getBoundingClientRect();return [r.x+r.width/2,r.y+r.height/2]}})()""")
     call("Input.dispatchTouchEvent",type="touchStart",touchPoints=[{"x":coord[0],"y":coord[1]}])
     call("Input.dispatchTouchEvent",type="touchEnd",touchPoints=[])
     time.sleep(.2)
 
 def shot(name):
-    png=base64.b64decode(call("Page.captureScreenshot",format="png")["data"])
+    try:
+        png=base64.b64decode(call("Page.captureScreenshot",format="png")["data"])
+    except (AssertionError,KeyError):
+        png=subprocess.check_output(["adb","exec-out","screencap","-p"],timeout=15)
     assert png.startswith(b"\x89PNG") and len(png)>4096
     (OUT/name).write_bytes(png)
 
@@ -88,7 +92,8 @@ def select_download(filename):
     time.sleep(1)
 
 wait(lambda: js("document.querySelector('#engine')?.textContent==='ONLINE'"))
-assert js("innerWidth>innerHeight")
+wait(lambda: js("innerWidth>innerHeight && document.querySelector('.hero').getBoundingClientRect().width>100"))
+print("Landscape viewport", js("[innerWidth,innerHeight]"), flush=True)
 shot("dashboard.png")
 for page in ["Library","Performance","Graphics","Controller","Settings","Diagnostics","About","Dashboard"]:
     click("nav [data-page="+page+"]")
