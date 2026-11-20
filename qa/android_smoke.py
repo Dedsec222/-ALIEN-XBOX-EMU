@@ -1,4 +1,5 @@
 """Run against an installed debug APK on an Android emulator with an English DocumentsUI."""
+import base64
 import json
 import pathlib
 import subprocess
@@ -55,7 +56,9 @@ def click(selector):
     time.sleep(.2)
 
 def shot(name):
-    (OUT/name).write_bytes(subprocess.check_output(["adb","exec-out","screencap","-p"]))
+    png=base64.b64decode(call("Page.captureScreenshot",format="png")["data"])
+    assert png.startswith(b"\x89PNG") and len(png)>4096
+    (OUT/name).write_bytes(png)
 
 def node_click(label, seconds=18):
     def locate():

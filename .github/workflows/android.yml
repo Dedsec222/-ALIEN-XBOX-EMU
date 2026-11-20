@@ -58,7 +58,7 @@ jobs:
       - name: Prepare Android test APK
         run: |
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0' 'ndk;27.2.12479018' 'cmake;3.22.1'
-          gradle -PtestAbi=x86_64 :app:assembleDebug
+          gradle --no-daemon -PtestAbi=x86_64 :app:assembleDebug
           python -m pip install websocket-client
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
@@ -69,6 +69,8 @@ jobs:
           arch: x86_64
           target: google_apis
           profile: pixel_6
+          ram-size: 2048M
+          emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -feature -Vulkan -camera-back none
           disable-animations: true
           script: |
             adb install app/build/outputs/apk/debug/app-debug.apk
