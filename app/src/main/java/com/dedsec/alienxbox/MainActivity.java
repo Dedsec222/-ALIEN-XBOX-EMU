@@ -4,6 +4,14 @@ import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.graphics.Color;
+import android.app.ActivityManager;
+import android.os.Build;
+import android.os.Debug;
+import android.provider.OpenableColumns;
+import android.database.Cursor;
+import android.content.SharedPreferences;
+import android.widget.ProgressBar;
+import android.widget.Toast;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
@@ -32,6 +40,12 @@ public class MainActivity extends Activity {
     private LinearLayout content;
     private TextView status;
     private int request;
+    private String currentPage = "Dashboard";
+    private SharedPreferences prefs;
+    private Uri lastHomebrew;
+    private String lastHomebrewName = "";
+    private String lastResult = "No homebrew has been executed in this session.";
+    private boolean compactMode = false;
 
     private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
     private GradientDrawable surface(int color, int stroke) {
@@ -81,6 +95,11 @@ public class MainActivity extends Activity {
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+        prefs = getSharedPreferences("alien_teal_settings", MODE_PRIVATE);
+        compactMode = prefs.getBoolean("compact", false);
+        String savedUri = prefs.getString("last_homebrew_uri", "");
+        if (!savedUri.isEmpty()) { try { lastHomebrew = Uri.parse(savedUri); } catch (Exception ignored) {} }
+        lastHomebrewName = prefs.getString("last_homebrew_name", "");
         getWindow().setStatusBarColor(BG);
         getWindow().setNavigationBarColor(BG);
         LinearLayout root = column();
@@ -102,7 +121,7 @@ public class MainActivity extends Activity {
         menu.setPadding(dp(12), dp(18), dp(12), dp(8));
         menu.setBackgroundColor(0xff09181c);
         body.addView(menu, new LinearLayout.LayoutParams(dp(174), -1));
-        String[] names = {"Dashboard", "Homebrew", "Performance", "Graphics", "Controller", "Diagnostics"};
+        String[] names = {"Dashboard", "Library", "Homebrew", "Performance", "Graphics", "Controller", "Diagnostics", "Settings"};
         for (String name : names) {
             TextView nav = text("  " + name, 14, name.equals("Dashboard") ? TEAL : 0xffb4d2d4, name.equals("Dashboard"));
             nav.setPadding(dp(5), dp(10), dp(5), dp(10));
@@ -112,11 +131,13 @@ public class MainActivity extends Activity {
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
         body.addView(scroll, new LinearLayout.LayoutParams(0, -1, 1));
-        content = column(); content.setPadding(dp(20), dp(18), dp(20), dp(12));
+        content = column(); content.setPadding(dp(compactMode ? 10 : 20), dp(compactMode ? 8 : 18), dp(compactMode ? 10 : 20), dp(12));
         scroll.addView(content);
         showPage("Dashboard");
     }
     private void showPage(String page) {
+        currentPage = page;
+        status = null;
         content.removeAllViews();
         content.addView(text(page.toUpperCase(), 21, 0xffffffff, true));
         addSpace(content, 14);
@@ -125,12 +146,26 @@ public class MainActivity extends Activity {
             line(hero, "Native ARM64 research emulator  •  x86-64 interpreter  •  PE32+ homebrew");
             line(hero, "Xbox Series X|S retail games: NOT SUPPORTED");
             hero.addView(button("Launch Alien Doors homebrew", () -> showPage("Homebrew")));
+            addSpace(hero, 8);
+            hero.addView(button("Browse homebrew library", () -> showPage("Library")));
             LinearLayout overview = card(content, "ENGINE CAPABILITIES");
             line(overview, "✓ Native C++ guest interpreter");
             line(overview, "✓ Restricted AMD64 PE32+ executable loader");
             line(overview, "✓ Vulkan loader diagnostics");
             line(overview, "○ Xbox OS / retail package loading: not implemented");
             line(overview, "○ Xbox graphics translation / game compatibility: not implemented");
+        } else if (page.equals("Library")) {
+            LinearLayout library = card(content, "LOCAL HOMEBREW LIBRARY");
+            line(library, "ALIEN DOORS  •  bundled x86-64 test executable");
+            library.addView(button("Play Alien Doors", () -> showPage("Homebrew")));
+            addSpace(library, 12);
+            line(library, lastHomebrew == null ? "No external homebrew imported yet." : "Last imported: " + lastHomebrewName);
+            if (lastHomebrew != null) library.addView(button("Run last imported homebrew", () -> launch(lastHomebrew, 0, 0)));
+            addSpace(library, 8);
+            library.addView(button("Import PE32+ homebrew", this::openHomebrew));
+            line(library, "Only the last selected document is remembered. Xbox packages cannot run.");
+            LinearLayout result = card(content, "LAST EXECUTION RESULT");
+            line(result, lastResult);
         } else if (page.equals("Homebrew")) {
             LinearLayout games = card(content, "ALIEN DOORS  •  PLAYABLE HOMEBREW TEST");
             line(games, "Choose a door. The bundled x86-64 executable evaluates your choice.");
@@ -142,9 +177,7 @@ public class MainActivity extends Activity {
                 LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(52), 1);
                 lp.setMargins(dp(3), dp(6), dp(3), dp(6)); doors.addView(door, lp);
             }
-            games.addView(button("Open AMD64 PE32+ homebrew file", () ->
-                startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT)
-                    .addCategory(Intent.CATEGORY_OPENABLE).setType("*/*"), 1)));
+            games.addView(button("Open AMD64 PE32+ homebrew file", this::openHomebrew));
             status = text("Ready. Single-section, freestanding AMD64 PE32+ images up to 4 MiB only.", 13, 0xffb8e3e4, false);
             status.setPadding(0, dp(12), 0, dp(5)); games.addView(status);
         } else if (page.equals("Diagnostics")) {
@@ -157,11 +190,32 @@ public class MainActivity extends Activity {
             line(perf, "Instruction budget: 100,000 per homebrew launch");
             line(perf, "Stable / Performance / Alien Mode: planned, not implemented");
             line(perf, "FPS and GPU usage will appear when a graphics runtime exists.");
+            line(perf, "Device: " + Build.MANUFACTURER + " " + Build.MODEL + " / Android " + Build.VERSION.RELEASE);
+            line(perf, "Supported ABIs: " + android.text.TextUtils.join(", ", Build.SUPPORTED_ABIS));
+            ActivityManager am = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
+            ActivityManager.MemoryInfo mi = new ActivityManager.MemoryInfo();
+            am.getMemoryInfo(mi);
+            line(perf, "Host RAM: " + (mi.totalMem / (1024 * 1024)) + " MiB total / " + (mi.availMem / (1024 * 1024)) + " MiB available");
+            line(perf, "App Java heap: " + (Runtime.getRuntime().totalMemory() / (1024 * 1024)) + " MiB allocated");
         } else if (page.equals("Graphics")) {
             LinearLayout graphics = card(content, "GRAPHICS BACKEND");
             line(graphics, "Vulkan loader probing is available in Diagnostics.");
             line(graphics, "Guest Xbox graphics translation: not implemented.");
             line(graphics, "Resolution scaling, shaders, FSR and frame limiting: unavailable.");
+        } else if (page.equals("Settings")) {
+            LinearLayout settings = card(content, "ALIEN TEAL APPEARANCE");
+            line(settings, "Theme: Alien Teal / OLED Black");
+            line(settings, "Compact layout: " + (compactMode ? "ON" : "OFF"));
+            settings.addView(button("Toggle compact spacing", () -> {
+                compactMode = !compactMode;
+                prefs.edit().putBoolean("compact", compactMode).apply();
+                content.setPadding(dp(compactMode ? 10 : 20), dp(compactMode ? 8 : 18), dp(compactMode ? 10 : 20), dp(12));
+                showPage("Settings");
+            }));
+            LinearLayout info = card(content, "EMULATOR STATUS");
+            line(info, "Genesis v0.2 / research build");
+            line(info, "No subscription or premium unlocks are required.");
+            line(info, "Retail Xbox compatibility is not implemented.");
         } else {
             LinearLayout controller = card(content, "CONTROLLER / INPUT");
             line(controller, "Alien Doors currently uses touchscreen choices.");
@@ -169,10 +223,29 @@ public class MainActivity extends Activity {
             line(controller, "No guest controller API is implemented yet.");
         }
     }
+    private void openHomebrew() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*");
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        startActivityForResult(intent, 1);
+    }
+    private String documentName(Uri uri) {
+        try (Cursor c = getContentResolver().query(uri, new String[]{OpenableColumns.DISPLAY_NAME}, null, null, null)) {
+            if (c != null && c.moveToFirst()) return c.getString(0);
+        } catch (Exception ignored) {}
+        return "Selected homebrew";
+    }
     @Override protected void onActivityResult(int code, int result, Intent data) {
         super.onActivityResult(code, result, data);
-        if (code == 1 && result == RESULT_OK && data != null && data.getData() != null)
-            launch(data.getData(), 0, 0);
+        if (code == 1 && result == RESULT_OK && data != null && data.getData() != null) {
+            Uri uri = data.getData();
+            try { getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION); }
+            catch (SecurityException ignored) {}
+            lastHomebrew = uri;
+            lastHomebrewName = documentName(uri);
+            prefs.edit().putString("last_homebrew_uri", uri.toString()).putString("last_homebrew_name", lastHomebrewName).apply();
+            showPage("Homebrew");
+            launch(uri, 0, 0);
+        }
     }
     private void launch(Uri uri, int choice, int target) {
         if (status == null) showPage("Homebrew");
@@ -196,7 +269,10 @@ public class MainActivity extends Activity {
             }
             final String result = message;
             runOnUiThread(() -> {
-                if (current == request && !isDestroyed() && status != null) status.setText(result);
+                if (current == request && !isDestroyed()) {
+                    lastResult = result;
+                    if (status != null) status.setText(result);
+                }
             });
         });
     }
