@@ -58,9 +58,9 @@ def js(expr):
 def click(selector):
     print("Touch",selector,flush=True)
     coord=js(f"""(()=>{{let el=document.querySelector({json.dumps(selector)});el.scrollIntoView({{block:'center'}});let r=el.getBoundingClientRect();return [r.x+r.width/2,r.y+r.height/2]}})()""")
-    call("Input.dispatchTouchEvent",type="touchStart",touchPoints=[{"x":coord[0],"y":coord[1]}])
-    call("Input.dispatchTouchEvent",type="touchEnd",touchPoints=[])
-    time.sleep(.2)
+    scale=js("devicePixelRatio * visualViewport.scale")
+    adb("shell","input","tap",str(round(coord[0]*scale)),str(round(coord[1]*scale)))
+    time.sleep(.45)
 
 def shot(name):
     try:
@@ -103,7 +103,7 @@ print("Landscape viewport", js("[innerWidth,innerHeight]"), flush=True)
 shot("dashboard.png")
 for page in ["Library","Performance","Graphics","Controller","Settings","Diagnostics","About","Dashboard"]:
     click("nav [data-page="+page+"]")
-    assert js("page")==page
+    wait(lambda: js("page")==page,8)
 click('[data-act="play"]')
 click('[data-num="1"]')
 wait(lambda:js("document.querySelector('#dialogbody').textContent.includes('Guest breakpoint')"))
