@@ -1,5 +1,6 @@
 #include "guest.hpp"
 #include "pe.hpp"
+#include "guest_memory.hpp"
 #include <vector>
 #include <algorithm>
 #include <jni.h>
@@ -61,7 +62,9 @@ Java_com_dedsec_alienxbox_MainActivity_execute(JNIEnv* env, jclass, jbyteArray p
     if (env->ExceptionCheck()) return nullptr;
     const auto mapped = genesis::mapPe(file);
     if (mapped.error) return env->NewStringUTF(mapped.error);
-    const auto cpu = genesis::interpret(mapped.bytes, std::clamp(budget, 1000, 100000), mapped.entryRva, choice, target);
+    const auto process = genesis::prepareProcess(file);
+    if (process.error) return env->NewStringUTF(process.error);
+    const auto cpu = genesis::interpret(mapped.bytes, std::clamp(budget, 1000, 100000), process.entry, choice, target);
     std::ostringstream report;
     switch (cpu.stop) {
     case genesis::Stop::breakpoint:
@@ -85,6 +88,6 @@ Java_com_dedsec_alienxbox_MainActivity_validate(JNIEnv* env, jclass, jbyteArray 
     std::vector<uint8_t> data(size);
     if (size) env->GetByteArrayRegion(program, 0, size, reinterpret_cast<jbyte*>(data.data()));
     if (env->ExceptionCheck()) return nullptr;
-    auto mapped = genesis::mapPe(data);
-    return env->NewStringUTF(mapped.error ? mapped.error : "");
+    auto process = genesis::prepareProcess(data);
+    return env->NewStringUTF(process.error ? process.error : "");
 }
