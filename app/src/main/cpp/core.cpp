@@ -59,8 +59,6 @@ Java_com_dedsec_alienxbox_MainActivity_execute(JNIEnv* env, jclass, jbyteArray p
     std::vector<uint8_t> file(n);
     if (n) env->GetByteArrayRegion(program, 0, n, reinterpret_cast<jbyte*>(file.data()));
     if (env->ExceptionCheck()) return nullptr;
-    const auto image = genesis::loadPe(file);
-    if (image.error) return env->NewStringUTF(image.error);
     const auto mapped = genesis::mapPe(file);
     if (mapped.error) return env->NewStringUTF(mapped.error);
     const auto cpu = genesis::interpret(mapped.bytes, std::clamp(budget, 1000, 100000), mapped.entryRva, choice, target);
@@ -87,8 +85,6 @@ Java_com_dedsec_alienxbox_MainActivity_validate(JNIEnv* env, jclass, jbyteArray 
     std::vector<uint8_t> data(size);
     if (size) env->GetByteArrayRegion(program, 0, size, reinterpret_cast<jbyte*>(data.data()));
     if (env->ExceptionCheck()) return nullptr;
-    auto image = genesis::loadPe(data);
-    if (image.error) return env->NewStringUTF(image.error);
     auto mapped = genesis::mapPe(data);
     return env->NewStringUTF(mapped.error ? mapped.error : "");
 }
