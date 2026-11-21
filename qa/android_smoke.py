@@ -29,7 +29,8 @@ def wait(fn, seconds=40):
     try:
         print(adb("shell","dumpsys","window","windows").split("mCurrentFocus=")[-1][:180],flush=True)
         adb("shell","uiautomator","dump","/sdcard/failure.xml")
-        print(adb("shell","cat","/sdcard/failure.xml")[:1800],flush=True)
+        tree=ET.fromstring(adb("shell","cat","/sdcard/failure.xml"))
+        print([(n.get("text"),n.get("content-desc")) for n in tree.iter("node") if n.get("text") or n.get("content-desc")],flush=True)
     except Exception:
         pass
     raise AssertionError(f"Timed out waiting for {fn}: {last}")
@@ -93,7 +94,11 @@ def node_click(label, seconds=18):
         adb("shell","uiautomator","dump","/sdcard/window.xml")
         xml=ET.fromstring(adb("shell","cat","/sdcard/window.xml"))
         for node in xml.iter("node"):
-            if node.get("text","").lower()==label.lower() or node.get("content-desc","").lower()==label.lower():
+            labels=[node.get(k,"").casefold() for k in ("text","content-desc")]
+            names={label.casefold()}
+            if "." in label:
+                names.add(pathlib.Path(label).stem.casefold())
+            if any(v==n or (v.startswith(n) and v[len(n):len(n)+1] in {","," ","\n"}) for v in labels for n in names):
                 x,y,u,v=map(int,re.findall(r"\d+",node.get("bounds")))
                 adb("shell","input","tap",str((x+u)//2),str((y+v)//2));return True
     wait(locate,seconds)
@@ -112,7 +117,12 @@ def select_download(filename):
     except AssertionError:
         node_click("Show roots")
         node_click("Downloads")
-    node_click(filename)
+    try:
+        node_click(filename,6)
+    except AssertionError:
+        # List view exposes document display names even for thumbnail-only grid items.
+        node_click("List view",5)
+        node_click(filename)
     time.sleep(1)
 
 wait(lambda: js("document.querySelector('#engine')?.textContent==='ONLINE'"))
@@ -165,6 +175,8 @@ assert js("document.querySelector('#games').classList.contains('list')")
 click('[data-detail]:not([data-detail=doors])')
 adb("push","app/src/main/assets/portals.webp","/sdcard/Download/Genesis-cover.webp")
 adb("shell","am","broadcast","-a","android.intent.action.MEDIA_SCANNER_SCAN_FILE","-d","file:///sdcard/Download/Genesis-cover.webp")
+# Images can appear as thumbnail-only tiles in the Downloads provider.
+# Use a single distinctly named image in Pictures via the Images root.
 click("[data-act=art]")
 select_download("Genesis-cover.webp")
 wait(lambda:js("game().art>0"))
