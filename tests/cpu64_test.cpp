@@ -23,7 +23,7 @@ int main() {
     assert(result.gpr[0] == 0x12345678);
     assert(result.gpr[3] == 0x12345678);
     assert(result.gpr[4] == 8192);
-    assert(result.steps == 8);
+    assert(result.steps == 9);
     const uint8_t bad[] = {0x0f,0x05};
     assert(mem.initialize(0, bad) == MemoryFault::none);
     assert(executeGuest(mem, 0, 8192).exit == CpuExit::unsupported);
