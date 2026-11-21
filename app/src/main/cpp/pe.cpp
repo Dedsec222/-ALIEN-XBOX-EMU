@@ -58,6 +58,47 @@ PeInfo inspectPe(std::span<const uint8_t> file) {
     return info;
 }
 
+
+MappedPe mapPe(std::span<const uint8_t> file) {
+    const PeInfo info = inspectPe(file);
+    if (info.error) return {{}, 0, info.error};
+    // This is a safe staging limit, not an Xbox executable size limit.
+    if (info.imageSize > 64u * 1024u * 1024u)
+        return {{}, 0, "Image exceeds 64 MiB staging limit"};
+    auto u16 = [&](size_t p) -> uint16_t {
+        return uint16_t(file[p]) | (uint16_t(file[p+1]) << 8);
+    };
+    auto u32 = [&](size_t p) -> uint32_t {
+        return uint32_t(u16(p)) | (uint32_t(u16(p+2)) << 16);
+    };
+    const size_t pe = u32(0x3c), opt = pe + 24;
+    const uint32_t headerSize = u32(opt + 60);
+    const size_t table = opt + u16(pe + 20);
+    MappedPe result{};
+    result.entryRva = info.entryRva;
+    result.bytes.resize(info.imageSize, 0);
+    std::copy_n(file.begin(), headerSize, result.bytes.begin());
+    std::vector<std::pair<uint64_t, uint64_t>> regions;
+    regions.emplace_back(0, headerSize);
+    for (uint16_t i = 0; i < info.sections; ++i) {
+        const size_t s = table + size_t(i) * 40;
+        const uint32_t virtualSize = u32(s + 8);
+        const uint32_t rva = u32(s + 12);
+        const uint32_t rawSize = u32(s + 16);
+        const uint32_t raw = u32(s + 20);
+        const uint64_t span = std::max<uint64_t>(virtualSize, rawSize);
+        if (!span) continue;
+        for (const auto& [start, end] : regions) {
+            if (uint64_t(rva) < end && start < uint64_t(rva) + span)
+                return {{}, 0, "Overlapping PE image sections"};
+        }
+        regions.emplace_back(rva, uint64_t(rva) + span);
+        if (rawSize)
+            std::copy_n(file.begin() + raw, rawSize, result.bytes.begin() + rva);
+    }
+    return result;
+}
+
 Image loadPe(std::span<const uint8_t> file) {
     const auto fail = [](const char* message) { return Image{{}, 0, 0, message}; };
     const auto fits = [&](size_t at, size_t n) {
