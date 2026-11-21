@@ -1,6 +1,7 @@
 #include "guest.hpp"
 #include "pe.hpp"
 #include <vector>
+#include <algorithm>
 #include <jni.h>
 #include <vulkan/vulkan.h>
 #include <sstream>
@@ -11,7 +12,7 @@ Java_com_dedsec_alienxbox_MainActivity_diagnostic(JNIEnv* env, jclass) {
     const bool passed = cpu.stop == genesis::Stop::breakpoint && cpu.eax == 45 &&
                         cpu.ecx == 0 && cpu.steps == 30;
     std::ostringstream report;
-    report << "ARM64 native core loaded\n"
+    report << "Native Genesis core loaded\n"
            << "x86-64 guest loop (sum 1 through 9): " << (passed ? "PASS" : "FAIL")
            << "\nEAX: " << cpu.eax << "   ECX: " << cpu.ecx
            << "\nInstructions executed: " << cpu.steps << "\n";
@@ -25,12 +26,34 @@ Java_com_dedsec_alienxbox_MainActivity_diagnostic(JNIEnv* env, jclass) {
     uint32_t count = 0;
     if (vkEnumerateInstanceExtensionProperties(nullptr, &count, nullptr) == VK_SUCCESS)
         report << "Instance extensions: " << count << "\n";
+    VkApplicationInfo app{VK_STRUCTURE_TYPE_APPLICATION_INFO};
+    app.pApplicationName = "Genesis";
+    app.apiVersion = VK_API_VERSION_1_0;
+    VkInstanceCreateInfo info{VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
+    info.pApplicationInfo = &app;
+    VkInstance instance{};
+    if (vkCreateInstance(&info, nullptr, &instance) == VK_SUCCESS) {
+        uint32_t count = 0;
+        if (vkEnumeratePhysicalDevices(instance, &count, nullptr) == VK_SUCCESS && count) {
+            std::vector<VkPhysicalDevice> devices(count);
+            if (vkEnumeratePhysicalDevices(instance, &count, devices.data()) == VK_SUCCESS) {
+                for (const auto gpu : devices) {
+                    VkPhysicalDeviceProperties props;
+                    vkGetPhysicalDeviceProperties(gpu, &props);
+                    report << "GPU: " << props.deviceName << "\nDevice Vulkan: "
+                           << VK_VERSION_MAJOR(props.apiVersion) << "." << VK_VERSION_MINOR(props.apiVersion)
+                           << "." << VK_VERSION_PATCH(props.apiVersion) << "\n";
+                }
+            }
+        }
+        vkDestroyInstance(instance, nullptr);
+    } else report << "Vulkan device enumeration unavailable\n";
     return env->NewStringUTF(report.str().c_str());
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_dedsec_alienxbox_MainActivity_execute(JNIEnv* env, jclass, jbyteArray program,
-                                               jint choice, jint target, jboolean bundled) {
+                                               jint choice, jint target, jboolean bundled, jint budget) {
     const auto n = env->GetArrayLength(program);
     if (n > 4 * 1024 * 1024) return env->NewStringUTF("Image exceeds 4 MiB.");
     std::vector<uint8_t> file(n);
@@ -38,7 +61,7 @@ Java_com_dedsec_alienxbox_MainActivity_execute(JNIEnv* env, jclass, jbyteArray p
     if (env->ExceptionCheck()) return nullptr;
     const auto image = genesis::loadPe(file);
     if (image.error) return env->NewStringUTF(image.error);
-    const auto cpu = genesis::interpret(image.code, 100000, image.entry, choice, target);
+    const auto cpu = genesis::interpret(image.code, std::clamp(budget, 1000, 100000), image.entry, choice, target);
     std::ostringstream report;
     switch (cpu.stop) {
     case genesis::Stop::breakpoint:
@@ -53,4 +76,15 @@ Java_com_dedsec_alienxbox_MainActivity_execute(JNIEnv* env, jclass, jbyteArray p
     report << "\nRIP (RVA) 0x" << std::hex << image.sectionRva+cpu.rip << std::dec
            << "   EAX " << cpu.eax << "\nInstructions " << cpu.steps;
     return env->NewStringUTF(report.str().c_str());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_dedsec_alienxbox_MainActivity_validate(JNIEnv* env, jclass, jbyteArray program) {
+    const auto size = env->GetArrayLength(program);
+    if (size > 4 * 1024 * 1024) return env->NewStringUTF("Image exceeds 4 MiB.");
+    std::vector<uint8_t> data(size);
+    if (size) env->GetByteArrayRegion(program, 0, size, reinterpret_cast<jbyte*>(data.data()));
+    if (env->ExceptionCheck()) return nullptr;
+    auto image = genesis::loadPe(data);
+    return env->NewStringUTF(image.error ? image.error : "");
 }

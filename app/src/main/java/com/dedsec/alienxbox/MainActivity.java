@@ -1,283 +1,237 @@
 package com.dedsec.alienxbox;
 
-import android.app.Activity;
-import android.content.Intent;
-import android.content.pm.ActivityInfo;
-import android.graphics.Color;
-import android.app.ActivityManager;
-import android.os.Build;
-import android.os.Debug;
-import android.provider.OpenableColumns;
+import android.app.*;
+import android.os.*;
+import android.content.*;
 import android.database.Cursor;
-import android.content.SharedPreferences;
-import android.widget.ProgressBar;
-import android.widget.Toast;
-import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
+import android.graphics.*;
 import android.net.Uri;
-import android.os.Bundle;
-import android.view.Gravity;
-import android.view.View;
-import android.widget.Button;
-import android.widget.HorizontalScrollView;
-import android.widget.LinearLayout;
-import android.widget.ScrollView;
-import android.widget.TextView;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.Random;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import android.provider.OpenableColumns;
+import android.view.*;
+import android.webkit.*;
+import org.json.*;
+import java.io.*;
+import java.nio.file.Files;
+import java.security.MessageDigest;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MainActivity extends Activity {
     static { System.loadLibrary("alien_core"); }
     private static native String diagnostic();
-    private static native String execute(byte[] image, int choice, int target, boolean bundled);
-    private static final int BG = 0xff050e11, PANEL = 0xff10262a, TEAL = 0xff32f3df;
-    private final ExecutorService worker = Executors.newSingleThreadExecutor();
-    private final Random random = new Random();
-    private LinearLayout content;
-    private TextView status;
-    private int request;
-    private String currentPage = "Dashboard";
+    private static native String validate(byte[] file);
+    private static native String execute(byte[] file,int choice,int target,boolean bundled,int budget);
+    private static final String ROOT="https://genesis.invalid/";
+    private final ExecutorService io=Executors.newSingleThreadExecutor();
+    private final AtomicBoolean executing=new AtomicBoolean();
+    private WebView web;
     private SharedPreferences prefs;
-    private Uri lastHomebrew;
-    private String lastHomebrewName = "";
-    private String lastResult = "No homebrew has been executed in this session.";
-    private boolean compactMode = false;
+    private volatile String diagnostics="Probing native engine…";
+    private String pendingArt="", pendingReport="";
+    private volatile boolean closed;
+    private long lastWall, lastCpu;
+    private final Random random=new Random();
 
-    private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
-    private GradientDrawable surface(int color, int stroke) {
-        GradientDrawable d = new GradientDrawable();
-        d.setColor(color);
-        d.setCornerRadius(dp(13));
-        d.setStroke(dp(1), stroke);
-        return d;
-    }
-    private TextView text(String value, int size, int color, boolean bold) {
-        TextView t = new TextView(this);
-        t.setText(value); t.setTextSize(size); t.setTextColor(color);
-        if (bold) t.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        t.setGravity(Gravity.CENTER_VERTICAL);
-        return t;
-    }
-    private LinearLayout column() {
-        LinearLayout l = new LinearLayout(this);
-        l.setOrientation(LinearLayout.VERTICAL);
-        return l;
-    }
-    private void addSpace(LinearLayout parent, int height) {
-        View v = new View(this); parent.addView(v, new LinearLayout.LayoutParams(1, dp(height)));
-    }
-    private LinearLayout card(LinearLayout parent, String title) {
-        LinearLayout box = column();
-        box.setPadding(dp(17), dp(14), dp(17), dp(14));
-        box.setBackground(surface(PANEL, 0xff22646a));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
-        lp.bottomMargin = dp(13); parent.addView(box, lp);
-        box.addView(text(title, 16, TEAL, true));
-        addSpace(box, 10);
-        return box;
-    }
-    private Button button(String label, Runnable action) {
-        Button b = new Button(this);
-        b.setText(label); b.setAllCaps(false);
-        b.setTextColor(0xff041618); b.setTextSize(13);
-        b.setBackground(surface(TEAL, TEAL));
-        b.setOnClickListener(v -> action.run());
-        return b;
-    }
-    private void line(LinearLayout parent, String value) {
-        TextView t = text(value, 13, 0xffc3e3e5, false);
-        t.setPadding(0, dp(5), 0, dp(5)); parent.addView(t);
-    }
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
-        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
-        prefs = getSharedPreferences("alien_teal_settings", MODE_PRIVATE);
-        compactMode = prefs.getBoolean("compact", false);
-        String savedUri = prefs.getString("last_homebrew_uri", "");
-        if (!savedUri.isEmpty()) { try { lastHomebrew = Uri.parse(savedUri); } catch (Exception ignored) {} }
-        lastHomebrewName = prefs.getString("last_homebrew_name", "");
-        getWindow().setStatusBarColor(BG);
-        getWindow().setNavigationBarColor(BG);
-        LinearLayout root = column();
-        root.setBackgroundColor(BG);
-        setContentView(root);
-        LinearLayout header = new LinearLayout(this);
-        header.setGravity(Gravity.CENTER_VERTICAL);
-        header.setPadding(dp(20), dp(12), dp(20), dp(12));
-        header.setBackgroundColor(0xff08191d);
-        root.addView(header);
-        TextView logo = text("◈  ALIEN XBOX", 24, TEAL, true);
-        header.addView(logo, new LinearLayout.LayoutParams(0, -2, 1));
-        header.addView(text("GENESIS 0.2  •  ARM64  •  EXPERIMENTAL", 12, 0xff9ebec2, true));
-        View divider = new View(this); divider.setBackgroundColor(0xff237c7e);
-        root.addView(divider, new LinearLayout.LayoutParams(-1, dp(1)));
-        LinearLayout body = new LinearLayout(this);
-        root.addView(body, new LinearLayout.LayoutParams(-1, 0, 1));
-        LinearLayout menu = column();
-        menu.setPadding(dp(12), dp(18), dp(12), dp(8));
-        menu.setBackgroundColor(0xff09181c);
-        body.addView(menu, new LinearLayout.LayoutParams(dp(174), -1));
-        String[] names = {"Dashboard", "Library", "Homebrew", "Performance", "Graphics", "Controller", "Diagnostics", "Settings"};
-        for (String name : names) {
-            TextView nav = text("  " + name, 14, name.equals("Dashboard") ? TEAL : 0xffb4d2d4, name.equals("Dashboard"));
-            nav.setPadding(dp(5), dp(10), dp(5), dp(10));
-            nav.setOnClickListener(v -> showPage(name));
-            menu.addView(nav);
-        }
-        ScrollView scroll = new ScrollView(this);
-        scroll.setFillViewport(true);
-        body.addView(scroll, new LinearLayout.LayoutParams(0, -1, 1));
-        content = column(); content.setPadding(dp(compactMode ? 10 : 20), dp(compactMode ? 8 : 18), dp(compactMode ? 10 : 20), dp(12));
-        scroll.addView(content);
-        showPage("Dashboard");
-    }
-    private void showPage(String page) {
-        currentPage = page;
-        status = null;
-        content.removeAllViews();
-        content.addView(text(page.toUpperCase(), 21, 0xffffffff, true));
-        addSpace(content, 14);
-        if (page.equals("Dashboard")) {
-            LinearLayout hero = card(content, "ALIEN TEAL  /  COMMAND CENTER");
-            line(hero, "Native ARM64 research emulator  •  x86-64 interpreter  •  PE32+ homebrew");
-            line(hero, "Xbox Series X|S retail games: NOT SUPPORTED");
-            hero.addView(button("Launch Alien Doors homebrew", () -> showPage("Homebrew")));
-            addSpace(hero, 8);
-            hero.addView(button("Browse homebrew library", () -> showPage("Library")));
-            LinearLayout overview = card(content, "ENGINE CAPABILITIES");
-            line(overview, "✓ Native C++ guest interpreter");
-            line(overview, "✓ Restricted AMD64 PE32+ executable loader");
-            line(overview, "✓ Vulkan loader diagnostics");
-            line(overview, "○ Xbox OS / retail package loading: not implemented");
-            line(overview, "○ Xbox graphics translation / game compatibility: not implemented");
-        } else if (page.equals("Library")) {
-            LinearLayout library = card(content, "LOCAL HOMEBREW LIBRARY");
-            line(library, "ALIEN DOORS  •  bundled x86-64 test executable");
-            library.addView(button("Play Alien Doors", () -> showPage("Homebrew")));
-            addSpace(library, 12);
-            line(library, lastHomebrew == null ? "No external homebrew imported yet." : "Last imported: " + lastHomebrewName);
-            if (lastHomebrew != null) library.addView(button("Run last imported homebrew", () -> launch(lastHomebrew, 0, 0)));
-            addSpace(library, 8);
-            library.addView(button("Import PE32+ homebrew", this::openHomebrew));
-            line(library, "Only the last selected document is remembered. Xbox packages cannot run.");
-            LinearLayout result = card(content, "LAST EXECUTION RESULT");
-            line(result, lastResult);
-        } else if (page.equals("Homebrew")) {
-            LinearLayout games = card(content, "ALIEN DOORS  •  PLAYABLE HOMEBREW TEST");
-            line(games, "Choose a door. The bundled x86-64 executable evaluates your choice.");
-            LinearLayout doors = new LinearLayout(this);
-            games.addView(doors);
-            for (int i = 1; i <= 3; i++) {
-                final int choice = i;
-                Button door = button("DOOR " + i, () -> launch(null, choice, random.nextInt(3) + 1));
-                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(52), 1);
-                lp.setMargins(dp(3), dp(6), dp(3), dp(6)); doors.addView(door, lp);
+        prefs=getSharedPreferences("alien_teal_settings",MODE_PRIVATE);
+        if(state!=null){pendingArt=state.getString("art","");pendingReport=state.getString("report","");}
+        getWindow().getDecorView().setSystemUiVisibility(5894);
+        web=new WebView(this);
+        web.setBackgroundColor(0xff050b0d);
+        web.getSettings().setJavaScriptEnabled(true);
+        web.getSettings().setDomStorageEnabled(true);
+        web.getSettings().setAllowFileAccess(false);
+        web.getSettings().setAllowContentAccess(false);
+        web.setWebViewClient(new WebViewClient(){
+            @Override public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r){return true;}
+            @Override public WebResourceResponse shouldInterceptRequest(WebView v,WebResourceRequest r){
+                String url=r.getUrl().toString();
+                try {
+                    if(url.startsWith(ROOT)){
+                        String path=url.substring(ROOT.length());
+                        path=r.getUrl().getPath().substring(1);
+                        if(path.matches("art/[a-f0-9]{64}|art/doors"))
+                            return new WebResourceResponse("image/jpeg",null,new FileInputStream(new File(getFilesDir(),path.replace('/','-')+".jpg")));
+                        if(path.matches("index.html|app.js|style.css|portals.webp|alien.svg"))
+                            return new WebResourceResponse(path.endsWith("js")?"text/javascript":path.endsWith("css")?"text/css":path.endsWith("svg")?"image/svg+xml":path.endsWith("webp")?"image/webp":"text/html",null,getAssets().open(path));
+                    }
+                } catch(IOException ignored){}
+                return new WebResourceResponse("text/plain","UTF-8",404,"Missing",null,new ByteArrayInputStream(new byte[0]));
             }
-            games.addView(button("Open AMD64 PE32+ homebrew file", this::openHomebrew));
-            status = text("Ready. Single-section, freestanding AMD64 PE32+ images up to 4 MiB only.", 13, 0xffb8e3e4, false);
-            status.setPadding(0, dp(12), 0, dp(5)); games.addView(status);
-        } else if (page.equals("Diagnostics")) {
-            LinearLayout diagnostics = card(content, "NATIVE ENGINE DIAGNOSTICS");
-            line(diagnostics, diagnostic());
-            line(diagnostics, "Results are native diagnostics, not retail-game performance benchmarks.");
-        } else if (page.equals("Performance")) {
-            LinearLayout perf = card(content, "PERFORMANCE / EXPERIMENTAL");
-            line(perf, "Host CPU: ARM64  •  Guest ISA: limited AMD64 interpretation");
-            line(perf, "Instruction budget: 100,000 per homebrew launch");
-            line(perf, "Stable / Performance / Alien Mode: planned, not implemented");
-            line(perf, "FPS and GPU usage will appear when a graphics runtime exists.");
-            line(perf, "Device: " + Build.MANUFACTURER + " " + Build.MODEL + " / Android " + Build.VERSION.RELEASE);
-            line(perf, "Supported ABIs: " + android.text.TextUtils.join(", ", Build.SUPPORTED_ABIS));
-            ActivityManager am = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
-            ActivityManager.MemoryInfo mi = new ActivityManager.MemoryInfo();
-            am.getMemoryInfo(mi);
-            line(perf, "Host RAM: " + (mi.totalMem / (1024 * 1024)) + " MiB total / " + (mi.availMem / (1024 * 1024)) + " MiB available");
-            line(perf, "App Java heap: " + (Runtime.getRuntime().totalMemory() / (1024 * 1024)) + " MiB allocated");
-        } else if (page.equals("Graphics")) {
-            LinearLayout graphics = card(content, "GRAPHICS BACKEND");
-            line(graphics, "Vulkan loader probing is available in Diagnostics.");
-            line(graphics, "Guest Xbox graphics translation: not implemented.");
-            line(graphics, "Resolution scaling, shaders, FSR and frame limiting: unavailable.");
-        } else if (page.equals("Settings")) {
-            LinearLayout settings = card(content, "ALIEN TEAL APPEARANCE");
-            line(settings, "Theme: Alien Teal / OLED Black");
-            line(settings, "Compact layout: " + (compactMode ? "ON" : "OFF"));
-            settings.addView(button("Toggle compact spacing", () -> {
-                compactMode = !compactMode;
-                prefs.edit().putBoolean("compact", compactMode).apply();
-                content.setPadding(dp(compactMode ? 10 : 20), dp(compactMode ? 8 : 18), dp(compactMode ? 10 : 20), dp(12));
-                showPage("Settings");
-            }));
-            LinearLayout info = card(content, "EMULATOR STATUS");
-            line(info, "Genesis v0.2 / research build");
-            line(info, "No subscription or premium unlocks are required.");
-            line(info, "Retail Xbox compatibility is not implemented.");
-        } else {
-            LinearLayout controller = card(content, "CONTROLLER / INPUT");
-            line(controller, "Alien Doors currently uses touchscreen choices.");
-            line(controller, "Xbox controller emulation and remapping: planned.");
-            line(controller, "No guest controller API is implemented yet.");
-        }
-    }
-    private void openHomebrew() {
-        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*");
-        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-        startActivityForResult(intent, 1);
-    }
-    private String documentName(Uri uri) {
-        try (Cursor c = getContentResolver().query(uri, new String[]{OpenableColumns.DISPLAY_NAME}, null, null, null)) {
-            if (c != null && c.moveToFirst()) return c.getString(0);
-        } catch (Exception ignored) {}
-        return "Selected homebrew";
-    }
-    @Override protected void onActivityResult(int code, int result, Intent data) {
-        super.onActivityResult(code, result, data);
-        if (code == 1 && result == RESULT_OK && data != null && data.getData() != null) {
-            Uri uri = data.getData();
-            try { getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION); }
-            catch (SecurityException ignored) {}
-            lastHomebrew = uri;
-            lastHomebrewName = documentName(uri);
-            prefs.edit().putString("last_homebrew_uri", uri.toString()).putString("last_homebrew_name", lastHomebrewName).apply();
-            showPage("Homebrew");
-            launch(uri, 0, 0);
-        }
-    }
-    private void launch(Uri uri, int choice, int target) {
-        if (status == null) showPage("Homebrew");
-        final int current = ++request;
-        status.setText("Executing guest homebrew…");
-        worker.execute(() -> {
-            String message;
-            try (InputStream stream = uri == null ? getAssets().open("doors.exe")
-                    : getContentResolver().openInputStream(uri)) {
-                if (stream == null) throw new IOException("File provider returned no stream.");
-                ByteArrayOutputStream data = new ByteArrayOutputStream();
-                byte[] chunk = new byte[8192]; int count;
-                while ((count = stream.read(chunk)) != -1) {
-                    if (data.size() + count > 4 * 1024 * 1024)
-                        throw new IOException("Image exceeds 4 MiB.");
-                    data.write(chunk, 0, count);
-                }
-                message = execute(data.toByteArray(), choice, target, uri == null);
-            } catch (IOException | SecurityException ex) {
-                message = "Could not load file. " + ex.getMessage();
-            }
-            final String result = message;
-            runOnUiThread(() -> {
-                if (current == request && !isDestroyed()) {
-                    lastResult = result;
-                    if (status != null) status.setText(result);
-                }
-            });
         });
+        WebView.setWebContentsDebuggingEnabled((getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE)!=0);
+        web.addJavascriptInterface(new Bridge(),"Genesis");
+        setContentView(web);
+        io.execute(()->{
+            diagnostics=diagnostic();
+            String previous=prefs.getString("last_homebrew_uri","");
+            if(!previous.isEmpty()){
+                try{importFile(Uri.parse(previous));prefs.edit().remove("last_homebrew_uri").apply();}
+                catch(Exception e){record("Migration",e.toString());}
+            }
+            event("updated","");
+        });
+        web.loadUrl(ROOT+"index.html");
     }
-    @Override protected void onDestroy() {
-        worker.shutdownNow();
-        super.onDestroy();
+    private static JSONObject obj(Object... kv){
+        JSONObject result=new JSONObject();
+        try{for(int i=0;i<kv.length;i+=2)result.put((String)kv[i],kv[i+1]);}
+        catch(JSONException e){throw new IllegalArgumentException(e);}return result;
     }
+    private JSONArray array(String key){
+        try{return new JSONArray(prefs.getString(key,"[]"));}catch(JSONException e){return new JSONArray();}
+    }
+    private synchronized void record(String label,String text){
+        JSONArray old=array("logs"),logs=new JSONArray();
+        logs.put(obj("label",label,"time",System.currentTimeMillis(),"text",text));
+        for(int i=0;i<Math.min(79,old.length());i++)logs.put(old.opt(i));
+        prefs.edit().putString("logs",logs.toString()).apply();
+    }
+    private void event(String kind,String value){
+        runOnUiThread(()->{if(!closed) web.evaluateJavascript("window.receive && receive("+JSONObject.quote(kind)+","+JSONObject.quote(value)+")",null);});
+    }
+    private byte[] read(InputStream source,int limit) throws IOException{
+        if(source==null)throw new IOException("Document unavailable.");
+        try(InputStream input=source;ByteArrayOutputStream output=new ByteArrayOutputStream()){
+            byte[] chunk=new byte[8192];int count;
+            while((count=input.read(chunk))!=-1){
+                if(output.size()+count>limit)throw new IOException("File exceeds "+(limit>>20)+" MiB.");
+                output.write(chunk,0,count);
+            }return output.toByteArray();
+        }
+    }
+    private String name(Uri uri){
+        try(Cursor c=getContentResolver().query(uri,new String[]{OpenableColumns.DISPLAY_NAME},null,null,null)){
+            if(c!=null && c.moveToFirst() && c.getString(0)!=null)return c.getString(0);
+        }catch(RuntimeException ignored){}return "Imported homebrew";
+    }
+    private void importFile(Uri uri) throws Exception{
+        byte[] bytes=read(getContentResolver().openInputStream(uri),4<<20);
+        String issue=validate(bytes);
+        if(!issue.isEmpty())throw new IOException(issue);
+        StringBuilder hash=new StringBuilder();
+        for(byte b:MessageDigest.getInstance("SHA-256").digest(bytes))hash.append(String.format(Locale.ROOT,"%02x",b));
+        String id=hash.toString();
+        JSONArray games=array("games");
+        for(int i=0;i<games.length();i++)if(id.equals(games.getJSONObject(i).optString("id")))return;
+        Files.write(new File(getFilesDir(),id+".pe").toPath(),bytes);
+        games.put(obj("id",id,"name",name(uri),"size",bytes.length,"added",System.currentTimeMillis()));
+        prefs.edit().putString("games",games.toString()).commit();
+    }
+    private void artwork(Uri uri,String id) throws IOException{
+        if(!validId(id))throw new IOException("Select a game first.");
+        byte[] image=read(getContentResolver().openInputStream(uri),8<<20);
+        BitmapFactory.Options opts=new BitmapFactory.Options();opts.inJustDecodeBounds=true;
+        BitmapFactory.decodeByteArray(image,0,image.length,opts);
+        if(opts.outWidth<=0 || opts.outHeight<=0)throw new IOException("Unsupported artwork.");
+        opts.inSampleSize=1;
+        while(Math.max(opts.outWidth,opts.outHeight)/opts.inSampleSize>1200)opts.inSampleSize*=2;
+        opts.inJustDecodeBounds=false;
+        Bitmap bitmap=BitmapFactory.decodeByteArray(image,0,image.length,opts);
+        if(bitmap==null)throw new IOException("Image decoder failed.");
+        File temp=File.createTempFile("art",".jpg",getFilesDir());
+        try {
+            try(OutputStream out=new FileOutputStream(temp)){
+                if(!bitmap.compress(Bitmap.CompressFormat.JPEG,88,out))throw new IOException("Artwork conversion failed.");
+            }
+            Files.move(temp.toPath(),new File(getFilesDir(),"art-"+id+".jpg").toPath(),java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        }finally{bitmap.recycle();temp.delete();}
+        prefs.edit().putLong("art-"+id,System.currentTimeMillis()).apply();
+    }
+    private static boolean validId(String id){return "doors".equals(id)||id.matches("[a-f0-9]{64}");}
+    public class Bridge {
+        @JavascriptInterface public String preferences(){return prefs.getString("dashboardPreferences","");}
+        @JavascriptInterface public boolean savePreferences(String json){
+            if(json==null || json.length()>262144)return false;
+            try{new JSONObject(json);}catch(JSONException invalid){return false;}
+            return prefs.edit().putString("dashboardPreferences",json).commit();
+        }
+        @JavascriptInterface public String snapshot(){
+            JSONArray games=array("games");JSONArray all=new JSONArray();
+            all.put(obj("id","doors","name","Alien Doors","size",1024,"added",0));
+            for(int i=0;i<games.length();i++)all.put(games.opt(i));
+            for(int i=0;i<all.length();i++){JSONObject g=all.optJSONObject(i);try{
+                g.put("art",prefs.getLong("art-"+g.optString("id"),0));
+            }catch(JSONException ignored){}}
+            return obj("games",all,"logs",array("logs"),"diag",diagnostics,"device",Build.MANUFACTURER+" "+Build.MODEL,
+                "android",Build.VERSION.RELEASE,"abi",Build.SUPPORTED_ABIS[0],"compact",prefs.getBoolean("compact",false)).toString();
+        }
+        @JavascriptInterface public synchronized String metrics(){
+            ActivityManager.MemoryInfo m=new ActivityManager.MemoryInfo();
+            ((ActivityManager)getSystemService(ACTIVITY_SERVICE)).getMemoryInfo(m);
+            long now=SystemClock.elapsedRealtime(), cpu=android.os.Process.getElapsedCpuTime();
+            int cores=Runtime.getRuntime().availableProcessors();
+            int usage=lastWall==0 || now<=lastWall?-1:(int)Math.min(100,100*(cpu-lastCpu)/((now-lastWall)*cores));
+            if(lastWall==0||now-lastWall>300){lastCpu=cpu;lastWall=now;}
+            String[] levels={"Normal","Light","Moderate","Severe","Critical","Emergency","Shutdown"};
+            int heat=Build.VERSION.SDK_INT>=29?((PowerManager)getSystemService(POWER_SERVICE)).getCurrentThermalStatus():-1;
+            JSONArray pads=new JSONArray();
+            for(int id:InputDevice.getDeviceIds()){
+                InputDevice d=InputDevice.getDevice(id);
+                if(d!=null && (d.supportsSource(InputDevice.SOURCE_GAMEPAD)||d.supportsSource(InputDevice.SOURCE_JOYSTICK)))pads.put(d.getName());
+            }
+            return obj("avail",m.availMem,"total",m.totalMem,"heap",Runtime.getRuntime().totalMemory()-Runtime.getRuntime().freeMemory(),
+                "cores",cores,"cpu",usage,"thermal",heat>=0 && heat<levels.length?levels[heat]:"Unavailable","pads",pads).toString();
+        }
+        @JavascriptInterface public void pick(String type,String id){runOnUiThread(()->{
+            if(closed)return;
+            boolean art=type.equals("art");
+            if(art && !validId(id))return;
+            pendingArt=id;
+            try{startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+                .setType(art?"image/*":"*/*"),art?2:1);}catch(ActivityNotFoundException e){event("error","Document picker unavailable.");}
+        });}
+        @JavascriptInterface public void run(String id,int choice,int limit){
+            if(!validId(id)||closed||!executing.compareAndSet(false,true))return;
+            io.execute(()->{
+                try{
+                    boolean bundled="doors".equals(id);
+                    byte[] bytes=read(bundled?getAssets().open("doors.exe"):new FileInputStream(new File(getFilesDir(),id+".pe")),4<<20);
+                    long start=SystemClock.elapsedRealtimeNanos();
+                    String result=execute(bytes,choice,bundled?random.nextInt(3)+1:0,bundled,limit).trim();
+                    String report=result+"\nExecution time: "+String.format(Locale.ROOT,"%.3f ms",(SystemClock.elapsedRealtimeNanos()-start)/1e6);
+                    record(id,report);event("result",report);
+                }catch(Exception e){record(id,e.toString());event("error",e.getMessage());}
+                finally{executing.set(false);}
+            });
+        }
+        @JavascriptInterface public String notices(){
+            try{return new String(read(getAssets().open("NDK-NOTICE.txt"),256<<10),java.nio.charset.StandardCharsets.UTF_8);}
+            catch(IOException ex){return ex.toString();}
+        }
+        @JavascriptInterface public void exportReport(){runOnUiThread(()->{
+            if(closed)return;
+            pendingReport=snapshot();
+            try{startActivityForResult(new Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/json")
+                .putExtra(Intent.EXTRA_TITLE,"alien-xbox-diagnostics.json"),3);}catch(ActivityNotFoundException e){event("error","Export unavailable.");}
+        });}
+        @JavascriptInterface public void probe(){if(!closed)io.execute(()->{diagnostics=diagnostic();event("updated","Probe complete");});}
+        @JavascriptInterface public void haptic(){runOnUiThread(()->{if(!closed)web.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);});}
+    }
+    @Override protected void onActivityResult(int code,int result,Intent data){
+        super.onActivityResult(code,result,data);
+        if(result!=RESULT_OK||data==null||data.getData()==null)return;
+        Uri uri=data.getData();String art=pendingArt,report=pendingReport;
+        io.execute(()->{try{
+            if(code==1)importFile(uri);
+            else if(code==2)artwork(uri,art);
+            else if(code==3){try(OutputStream out=getContentResolver().openOutputStream(uri,"wt")){
+                if(out==null)throw new IOException("Cannot open destination.");out.write(report.getBytes("UTF-8"));}}
+            else return;
+            event("updated",code==1?"Homebrew added to library":code==2?"Artwork updated":"Report exported");
+        }catch(Exception e){record("Document",e.toString());event("error",e.toString());}});
+    }
+    @Override public boolean dispatchKeyEvent(KeyEvent e){
+        if(e.isFromSource(InputDevice.SOURCE_GAMEPAD) && !KeyEvent.isModifierKey(e.getKeyCode())){
+            if(e.getAction()==KeyEvent.ACTION_DOWN && e.getRepeatCount()==0)event("pad",KeyEvent.keyCodeToString(e.getKeyCode()));
+            return true;
+        }return super.dispatchKeyEvent(e);
+    }
+    @Override protected void onSaveInstanceState(Bundle b){super.onSaveInstanceState(b);b.putString("art",pendingArt);b.putString("report",pendingReport);}
+    @Override public void onBackPressed(){web.evaluateJavascript("window.goBack && goBack()",value->{if("false".equals(value))finish();});}
+    @Override protected void onPause(){web.onPause();super.onPause();}
+    @Override protected void onResume(){super.onResume();if(web!=null)web.onResume();}
+    @Override protected void onDestroy(){closed=true;io.shutdownNow();web.removeJavascriptInterface("Genesis");web.destroy();super.onDestroy();}
 }

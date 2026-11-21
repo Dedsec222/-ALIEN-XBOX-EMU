@@ -42,3 +42,11 @@ The demo is assembled from samples/doors.s using the NDK LLVM bin directory on P
 
     clang --target=x86_64-pc-windows-msvc -c samples/doors.s -o doors.obj
     lld-link /entry:entry /subsystem:console /nodefaultlib /fixed /timestamp:0 /out:app/src/main/assets/doors.exe doors.obj
+
+## Alien Teal Ultimate 0.3.0
+
+The landscape dashboard is bundled HTML/CSS in a local-only Android WebView. File selection, artwork decoding, CPU execution, device probes, input and report export run through the Android activity. The application requests no network or broad storage permission. Homebrew is validated and copied to private storage, and the legacy last-selected document is migrated when still readable.
+
+Alien Doors, imported PE32+ details, favorites, library views, themes and input mapping are available from the navigation rail. Performance shows host memory, process CPU sampled across cores, Android thermal status and measured execution duration. Graphics enumerates actual Vulkan devices. Guest graphics, Xbox system services and retail game loading remain unavailable.
+
+The workflow builds the ARM64 APK and checks ELF and ZIP alignment. A separate Android emulator job exercises the same source as x86_64, selects files through DocumentsUI and captures screenshots. The delivered APK is ARM64 only.

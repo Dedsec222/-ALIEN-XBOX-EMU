@@ -11,7 +11,7 @@ Image loadPe(std::span<const uint8_t> file) {
     const auto dword = [&](size_t p) { return word(p) | (word(p+2) << 16); };
     if (!fits(0, 64) || word(0) != 0x5a4d) return fail("Expected a PE executable (MZ header).");
     size_t pe = dword(60);
-    if (!fits(pe, 24) || dword(pe) != 0x4550) return fail("Invalid PE header.");
+    if (pe < 64 || !fits(pe, 24) || dword(pe) != 0x4550) return fail("Invalid PE header.");
     if (word(pe+4) != 0x8664) return fail("Only AMD64 images are supported.");
     if (!(word(pe+22) & 2) || (word(pe+22) & 0x2000)) return fail("Expected an executable, not a DLL.");
     size_t opt = pe + 24, length = word(pe+20);
