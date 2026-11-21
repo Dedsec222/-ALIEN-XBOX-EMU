@@ -24,6 +24,9 @@ int main() {
             auto cpu = genesis::interpret(image.code, 20, image.entry, door, target);
             assert(cpu.stop == genesis::Stop::breakpoint);
             assert(cpu.eax == unsigned(door == target));
+            const auto mappedCpu = genesis::interpret(mapped.bytes, 20, mapped.entryRva, door, target);
+            assert(mappedCpu.stop == genesis::Stop::breakpoint);
+            assert(mappedCpu.eax == cpu.eax);
         }
     }
     for (size_t size = 0; size < file.size(); ++size)
