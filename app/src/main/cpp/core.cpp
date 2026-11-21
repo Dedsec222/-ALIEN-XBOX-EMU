@@ -88,5 +88,7 @@ Java_com_dedsec_alienxbox_MainActivity_validate(JNIEnv* env, jclass, jbyteArray 
     if (size) env->GetByteArrayRegion(program, 0, size, reinterpret_cast<jbyte*>(data.data()));
     if (env->ExceptionCheck()) return nullptr;
     auto image = genesis::loadPe(data);
-    return env->NewStringUTF(image.error ? image.error : "");
+    if (image.error) return env->NewStringUTF(image.error);
+    auto mapped = genesis::mapPe(data);
+    return env->NewStringUTF(mapped.error ? mapped.error : "");
 }
