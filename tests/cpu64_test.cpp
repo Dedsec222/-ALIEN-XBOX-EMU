@@ -24,6 +24,22 @@ int main() {
     assert(result.gpr[3] == 0x12345678);
     assert(result.gpr[4] == 8192);
     assert(result.steps == 9);
+    // mov rax, 0x1000; mov ebx, 42; mov [rax], ebx; mov ecx, [rax]; int3
+    const uint8_t memoryProgram[] = {
+        0x48,0xb8,0x00,0x10,0,0,0,0,0,0,
+        0xbb,0x2a,0,0,0,
+        0x89,0x18,
+        0x8b,0x08,
+        0xcc
+    };
+    assert(mem.initialize(0, memoryProgram) == MemoryFault::none);
+    auto memoryRun = executeGuest(mem, 0, 8192);
+    assert(memoryRun.exit == CpuExit::breakpoint);
+    assert(memoryRun.gpr[1] == 42);
+    uint32_t stored = 0;
+    assert(mem.load32(4096, stored) == MemoryFault::none && stored == 42);
+    assert(mem.protect(4096, 4096, Read) == MemoryFault::none);
+    assert(executeGuest(mem, 0, 8192).exit == CpuExit::memoryFault);
     const uint8_t bad[] = {0x0f,0x05};
     assert(mem.initialize(0, bad) == MemoryFault::none);
     assert(executeGuest(mem, 0, 8192).exit == CpuExit::unsupported);
