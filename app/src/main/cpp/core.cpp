@@ -1,6 +1,7 @@
 #include "guest.hpp"
 #include "pe.hpp"
 #include "guest_memory.hpp"
+#include "cpu64.hpp"
 #include <vector>
 #include <algorithm>
 #include <jni.h>
@@ -64,6 +65,25 @@ Java_com_dedsec_alienxbox_MainActivity_execute(JNIEnv* env, jclass, jbyteArray p
     if (mapped.error) return env->NewStringUTF(mapped.error);
     const auto process = genesis::prepareProcess(file);
     if (process.error) return env->NewStringUTF(process.error);
+    // Preserve the original bundled door-game ABI. External freestanding
+    // homebrew uses the protected-memory CPU core with a real guest stack.
+    if (!bundled) {
+        auto state = genesis::executeGuest(process.memory, process.entry,
+                                          process.stackTop,
+                                          static_cast<uint64_t>(std::clamp(budget, 1000, 100000)));
+        std::ostringstream out;
+        switch (state.exit) {
+        case genesis::CpuExit::breakpoint: out << "Guest breakpoint"; break;
+        case genesis::CpuExit::halt: out << "Guest halted"; break;
+        case genesis::CpuExit::unsupported: out << "Unsupported guest instruction"; break;
+        case genesis::CpuExit::memoryFault: out << "Guest memory protection fault"; break;
+        case genesis::CpuExit::budget: out << "Instruction budget exhausted"; break;
+        }
+        out << "\\nRIP 0x" << std::hex << state.rip
+            << "\\nRAX 0x" << state.gpr[0] << std::dec
+            << "\\nInstructions " << state.steps;
+        return env->NewStringUTF(out.str().c_str());
+    }
     const auto cpu = genesis::interpret(mapped.bytes, std::clamp(budget, 1000, 100000), process.entry, choice, target);
     std::ostringstream report;
     switch (cpu.stop) {
