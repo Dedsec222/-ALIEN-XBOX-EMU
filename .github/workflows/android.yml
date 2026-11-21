@@ -25,6 +25,8 @@ jobs:
           "$RUNNER_TEMP/guest-test"
           g++ -std=c++20 -Wall -Wextra -Werror -Iapp/src/main/cpp app/src/main/cpp/{guest,pe}.cpp tests/loader_test.cpp -o "$RUNNER_TEMP/loader-test"
           "$RUNNER_TEMP/loader-test"
+          g++ -std=c++20 -Wall -Wextra -Werror -Iapp/src/main/cpp app/src/main/cpp/{guest,pe}.cpp tests/guest_memory_test.cpp -o "$RUNNER_TEMP/memory-test"
+          "$RUNNER_TEMP/memory-test"
       - name: Build debug APK
         run: |
           gradle :app:assembleDebug
