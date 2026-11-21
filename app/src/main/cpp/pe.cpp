@@ -2,6 +2,111 @@
 #include <algorithm>
 
 namespace genesis {
+
+PeInfo inspectPe(std::span<const uint8_t> file) {
+    PeInfo info{};
+    const auto fail = [&](const char* error) { info.error = error; return info; };
+    const auto fits = [&](uint64_t offset, uint64_t length) {
+        return offset <= file.size() && length <= file.size() - offset;
+    };
+    const auto u16 = [&](size_t p) -> uint16_t {
+        return uint16_t(file[p]) | uint16_t(uint16_t(file[p+1]) << 8);
+    };
+    const auto u32 = [&](size_t p) -> uint32_t {
+        return uint32_t(u16(p)) | (uint32_t(u16(p+2)) << 16);
+    };
+    if (!fits(0, 64) || u16(0) != 0x5a4d) return fail("Missing MZ header");
+    const uint32_t pe = u32(0x3c);
+    if (pe < 64 || !fits(pe, 24) || u32(pe) != 0x4550)
+        return fail("Invalid PE signature");
+    if (u16(pe+4) != 0x8664) return fail("Not an AMD64 PE image");
+    info.sections = u16(pe+6);
+    const uint16_t optSize = u16(pe+20);
+    const uint64_t opt = uint64_t(pe) + 24;
+    if (!fits(opt, optSize) || optSize < 112 || u16(opt) != 0x20b)
+        return fail("Invalid PE32+ optional header");
+    info.entryRva = u32(opt+16);
+    info.imageSize = u32(opt+56);
+    const uint32_t headerSize = u32(opt+60);
+    const uint32_t alignment = u32(opt+32);
+    const uint32_t count = u32(opt+108);
+    if (!info.sections || info.sections > 96 || !info.imageSize ||
+        !alignment || headerSize > info.imageSize || headerSize > file.size())
+        return fail("Invalid image dimensions");
+    if (count > (uint32_t(optSize) - 112u) / 8u) return fail("Truncated data directories");
+    if (count > 1) info.importsRva = u32(opt+112+8);
+    if (count > 5) info.relocationsRva = u32(opt+112+5*8);
+    const uint64_t table = opt + optSize;
+    if (!fits(table, uint64_t(info.sections)*40) ||
+        headerSize < table + uint64_t(info.sections)*40)
+        return fail("Truncated section table");
+    bool executableEntry = false;
+    for (uint16_t i = 0; i < info.sections; ++i) {
+        const uint64_t s = table + uint64_t(i)*40;
+        const uint32_t virtualSize = u32(s+8), rva = u32(s+12);
+        const uint32_t rawSize = u32(s+16), raw = u32(s+20);
+        const uint32_t flags = u32(s+36);
+        const uint64_t mappedSize = std::max<uint64_t>(virtualSize, rawSize);
+        if ((rawSize && !fits(raw, rawSize)) ||
+            uint64_t(rva)+mappedSize > info.imageSize)
+            return fail("Section outside file or image");
+        if ((flags & 0x20000000u) && info.entryRva >= rva &&
+            uint64_t(info.entryRva) < uint64_t(rva)+mappedSize)
+            executableEntry = true;
+    }
+    if (!executableEntry) return fail("Entry point is not in an executable section");
+    return info;
+}
+
+
+MappedPe mapPe(std::span<const uint8_t> file) {
+    const PeInfo info = inspectPe(file);
+    if (info.error) return {{}, 0, info.error};
+    // This is a safe staging limit, not an Xbox executable size limit.
+    if (info.imageSize > 64u * 1024u * 1024u)
+        return {{}, 0, "Image exceeds 64 MiB staging limit"};
+    auto u16 = [&](size_t p) -> uint16_t {
+        return uint16_t(file[p]) | (uint16_t(file[p+1]) << 8);
+    };
+    auto u32 = [&](size_t p) -> uint32_t {
+        return uint32_t(u16(p)) | (uint32_t(u16(p+2)) << 16);
+    };
+    const size_t pe = u32(0x3c), opt = pe + 24;
+    // No import resolver, relocation engine or OS service layer exists yet.
+    // Reject images requiring those services rather than pretending to run them.
+    const uint32_t directories = u32(opt + 108);
+    for (uint32_t i = 0; i < directories; ++i) {
+        if (u32(opt + 112 + size_t(i) * 8) ||
+            u32(opt + 116 + size_t(i) * 8))
+            return {{}, 0, "PE data directories are not supported yet"};
+    }
+    const uint32_t headerSize = u32(opt + 60);
+    const size_t table = opt + u16(pe + 20);
+    MappedPe result{};
+    result.entryRva = info.entryRva;
+    result.bytes.resize(info.imageSize, 0);
+    std::copy_n(file.begin(), headerSize, result.bytes.begin());
+    std::vector<std::pair<uint64_t, uint64_t>> regions;
+    regions.emplace_back(0, headerSize);
+    for (uint16_t i = 0; i < info.sections; ++i) {
+        const size_t s = table + size_t(i) * 40;
+        const uint32_t virtualSize = u32(s + 8);
+        const uint32_t rva = u32(s + 12);
+        const uint32_t rawSize = u32(s + 16);
+        const uint32_t raw = u32(s + 20);
+        const uint64_t span = std::max<uint64_t>(virtualSize, rawSize);
+        if (!span) continue;
+        for (const auto& [start, end] : regions) {
+            if (uint64_t(rva) < end && start < uint64_t(rva) + span)
+                return {{}, 0, "Overlapping PE image sections"};
+        }
+        regions.emplace_back(rva, uint64_t(rva) + span);
+        if (rawSize)
+            std::copy_n(file.begin() + raw, rawSize, result.bytes.begin() + rva);
+    }
+    return result;
+}
+
 Image loadPe(std::span<const uint8_t> file) {
     const auto fail = [](const char* message) { return Image{{}, 0, 0, message}; };
     const auto fits = [&](size_t at, size_t n) {

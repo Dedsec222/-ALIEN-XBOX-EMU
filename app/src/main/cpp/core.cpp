@@ -1,5 +1,6 @@
 #include "guest.hpp"
 #include "pe.hpp"
+#include "guest_memory.hpp"
 #include <vector>
 #include <algorithm>
 #include <jni.h>
@@ -59,9 +60,11 @@ Java_com_dedsec_alienxbox_MainActivity_execute(JNIEnv* env, jclass, jbyteArray p
     std::vector<uint8_t> file(n);
     if (n) env->GetByteArrayRegion(program, 0, n, reinterpret_cast<jbyte*>(file.data()));
     if (env->ExceptionCheck()) return nullptr;
-    const auto image = genesis::loadPe(file);
-    if (image.error) return env->NewStringUTF(image.error);
-    const auto cpu = genesis::interpret(image.code, std::clamp(budget, 1000, 100000), image.entry, choice, target);
+    const auto mapped = genesis::mapPe(file);
+    if (mapped.error) return env->NewStringUTF(mapped.error);
+    const auto process = genesis::prepareProcess(file);
+    if (process.error) return env->NewStringUTF(process.error);
+    const auto cpu = genesis::interpret(mapped.bytes, std::clamp(budget, 1000, 100000), process.entry, choice, target);
     std::ostringstream report;
     switch (cpu.stop) {
     case genesis::Stop::breakpoint:
@@ -73,7 +76,7 @@ Java_com_dedsec_alienxbox_MainActivity_execute(JNIEnv* env, jclass, jbyteArray p
     case genesis::Stop::truncated: report << "Truncated instruction"; break;
     case genesis::Stop::invalidTarget: report << "Invalid branch target"; break;
     }
-    report << "\nRIP (RVA) 0x" << std::hex << image.sectionRva+cpu.rip << std::dec
+    report << "\nRIP (RVA) 0x" << std::hex << cpu.rip << std::dec
            << "   EAX " << cpu.eax << "\nInstructions " << cpu.steps;
     return env->NewStringUTF(report.str().c_str());
 }
@@ -85,6 +88,6 @@ Java_com_dedsec_alienxbox_MainActivity_validate(JNIEnv* env, jclass, jbyteArray 
     std::vector<uint8_t> data(size);
     if (size) env->GetByteArrayRegion(program, 0, size, reinterpret_cast<jbyte*>(data.data()));
     if (env->ExceptionCheck()) return nullptr;
-    auto image = genesis::loadPe(data);
-    return env->NewStringUTF(image.error ? image.error : "");
+    auto process = genesis::prepareProcess(data);
+    return env->NewStringUTF(process.error ? process.error : "");
 }

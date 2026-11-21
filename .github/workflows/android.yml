@@ -19,12 +19,14 @@ jobs:
       - name: Install SDK tools
         run: |
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0' 'ndk;27.2.12479018' 'cmake;3.22.1'
-      - name: Exercise native guest interpreter
+      - name: Exercise native guest interpreter and protected memory
         run: |
           g++ -std=c++20 -Wall -Wextra -Werror -Iapp/src/main/cpp app/src/main/cpp/guest.cpp tests/guest_test.cpp -o "$RUNNER_TEMP/guest-test"
           "$RUNNER_TEMP/guest-test"
           g++ -std=c++20 -Wall -Wextra -Werror -Iapp/src/main/cpp app/src/main/cpp/{guest,pe}.cpp tests/loader_test.cpp -o "$RUNNER_TEMP/loader-test"
           "$RUNNER_TEMP/loader-test"
+          g++ -std=c++20 -Wall -Wextra -Werror -Iapp/src/main/cpp app/src/main/cpp/{guest,pe}.cpp tests/guest_memory_test.cpp -o "$RUNNER_TEMP/memory-test"
+          "$RUNNER_TEMP/memory-test"
       - name: Build debug APK
         run: |
           gradle :app:assembleDebug
