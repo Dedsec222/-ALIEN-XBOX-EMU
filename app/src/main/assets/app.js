@@ -9,13 +9,13 @@ const stamp=n=>new Date(n).toLocaleString();
 const bytes=n=>n>=1048576?(n/1048576).toFixed(1)+' MiB':(n/1024).toFixed(1)+' KiB';
 const gib=n=>(n/1073741824).toFixed(1);
 const base=JSON.parse(Genesis.snapshot());
-function readPreferences(){try{return JSON.parse(localStorage.getItem('preferences')||'{}')||{};}catch(error){return {};}}
+function readPreferences(){try{return JSON.parse(Genesis.preferences()||localStorage.getItem('preferences')||'{}')||{};}catch(error){return {};}}
 let prefs=Object.assign({theme:'teal',motion:true,haptic:true,large:false,compact:base.compact,view:'grid',favorites:[],budget:100000,sort:'name',mapping:{}},readPreferences());
 let data=base, metrics=JSON.parse(Genesis.metrics()), page='Dashboard', selected='doors',filter='all',query='',busy=false,bind='',lastKey='',timer;
 const historyStack=[];
 const main=$('#main'),dialog=$('#modal');
 const pages=['Dashboard','Library','Performance','Graphics','Controller','Settings','Diagnostics','About'];
-function save(){localStorage.setItem('preferences',JSON.stringify(prefs));apply();}
+function save(){if(!Genesis.savePreferences(JSON.stringify(prefs)))toast('Preference storage unavailable');apply();}
 function apply(){
  document.documentElement.dataset.theme=prefs.theme;
  document.body.classList.toggle('animate',prefs.motion);

@@ -142,6 +142,12 @@ public class MainActivity extends Activity {
     }
     private static boolean validId(String id){return "doors".equals(id)||id.matches("[a-f0-9]{64}");}
     public class Bridge {
+        @JavascriptInterface public String preferences(){return prefs.getString("dashboardPreferences","");}
+        @JavascriptInterface public boolean savePreferences(String json){
+            if(json==null || json.length()>262144)return false;
+            try{new JSONObject(json);}catch(JSONException invalid){return false;}
+            return prefs.edit().putString("dashboardPreferences",json).commit();
+        }
         @JavascriptInterface public String snapshot(){
             JSONArray games=array("games");JSONArray all=new JSONArray();
             all.put(obj("id","doors","name","Alien Doors","size",1024,"added",0));
