@@ -18,7 +18,7 @@ int main() {
     assert(!mapped.error);
     assert(mapped.bytes.size() == metadata.imageSize);
     assert(mapped.entryRva == metadata.entryRva);
-    assert(mapped.bytes.at(mapped.entryRva) == image.code.at(image.entry));
+    assert(mapped.bytes.at(mapped.entryRva) == image.code[image.entry]);
     for (int door = 1; door <= 3; ++door) {
         for (int target = 1; target <= 3; ++target) {
             auto cpu = genesis::interpret(image.code, 20, image.entry, door, target);
