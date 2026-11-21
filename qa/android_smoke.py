@@ -76,10 +76,13 @@ def click(selector):
         time.sleep(.2)
         return
     print("Touch",selector,flush=True)
-    coord=js(f"""(()=>{{let el=document.querySelector({json.dumps(selector)});el.scrollIntoView({{block:'center'}});let r=el.getBoundingClientRect();return [r.x+r.width/2,r.y+r.height/2]}})()""")
-    scale=js("devicePixelRatio * visualViewport.scale")
-    adb("shell","input","tap",str(round(coord[0]*scale)),str(round(coord[1]*scale)))
-    time.sleep(.45)
+    def tap():
+        coord=js(f"""(()=>{{let el=document.querySelector({json.dumps(selector)});el.scrollIntoView({{block:'center'}});let r=el.getBoundingClientRect();return [r.x+r.width/2,r.y+r.height/2]}})()""")
+        scale=js("devicePixelRatio * visualViewport.scale")
+        adb("shell","input","tap",str(round(coord[0]*scale)),str(round(coord[1]*scale)))
+        time.sleep(.6)
+        return js("page")==selector.split("=")[1][:-1]
+    wait(tap,12)
 
 def shot(name):
     try:
@@ -175,8 +178,6 @@ assert js("document.querySelector('#games').classList.contains('list')")
 click('[data-detail]:not([data-detail=doors])')
 adb("push","app/src/main/assets/portals.webp","/sdcard/Download/Genesis-cover.webp")
 adb("shell","am","broadcast","-a","android.intent.action.MEDIA_SCANNER_SCAN_FILE","-d","file:///sdcard/Download/Genesis-cover.webp")
-# Images can appear as thumbnail-only tiles in the Downloads provider.
-# Use a single distinctly named image in Pictures via the Images root.
 click("[data-act=art]")
 select_download("Genesis-cover.webp")
 wait(lambda:js("game().art>0"))

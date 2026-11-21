@@ -44,6 +44,8 @@ jobs:
           if-no-files-found: error
           path: app/build/outputs/apk/debug/*.apk
   android-smoke:
+    outputs:
+      screenshots: ${{ steps.captures.outputs.artifact-id }}
     runs-on: ubuntu-latest
     timeout-minutes: 24
     steps:
@@ -79,11 +81,11 @@ jobs:
             adb install app/build/outputs/apk/debug/app-debug.apk
             python qa/android_smoke.py
       - uses: actions/upload-artifact@v4
-        if: always()
+        id: captures
         with:
-          name: alien-teal-android-screenshots
+          name: alien-teal-android-screenshots-${{ github.run_attempt }}
           path: qa-output/*.png
-          if-no-files-found: warn
+          if-no-files-found: error
   publish:
     if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[publish 0.3.0]')
     needs: [build, android-smoke]
@@ -96,7 +98,8 @@ jobs:
           name: alien-xbox-genesis-arm64-debug
       - uses: actions/download-artifact@v4
         with:
-          name: alien-teal-android-screenshots
+          artifact-ids: ${{ needs.android-smoke.outputs.screenshots }}
+          merge-multiple: true
           path: screenshots
       - name: Publish verified APK
         env:
