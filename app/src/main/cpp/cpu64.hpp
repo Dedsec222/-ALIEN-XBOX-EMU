@@ -94,10 +94,38 @@ inline CpuState executeGuest(GuestMemory& mem, uint32_t entry,
         if (op == 0x31 || op == 0x89 || op == 0x8b || op == 0x01 || op == 0x29 || op == 0x39) {
             uint8_t modrm{};
             if (!read(pc++, modrm)) { s.exit = CpuExit::memoryFault; break; }
-            if ((modrm & 0xc0) != 0xc0) { s.exit = CpuExit::unsupported; break; }
             const unsigned src = ((modrm >> 3) & 7) + ((rex & 4) ? 8 : 0);
             const unsigned dst = (modrm & 7) + ((rex & 1) ? 8 : 0);
             const uint64_t mask = wide ? UINT64_MAX : UINT32_MAX;
+            // Register-indirect MOV, with guest permissions checked on every access.
+            // Complex SIB, RIP-relative and displacement addressing remain unsupported.
+            if ((modrm & 0xc0) == 0x00 && (modrm & 7) != 4 &&
+                (modrm & 7) != 5 && (op == 0x89 || op == 0x8b)) {
+                const uint64_t address = s.gpr[dst];
+                const unsigned width = wide ? 8u : 4u;
+                if (address > UINT32_MAX) { s.exit = CpuExit::memoryFault; break; }
+                uint8_t data[8]{};
+                if (op == 0x89) {
+                    for (unsigned i = 0; i < width; ++i)
+                        data[i] = uint8_t(s.gpr[src] >> (8 * i));
+                    if (mem.write(static_cast<uint32_t>(address),
+                                  std::span<const uint8_t>(data, width)) != MemoryFault::none) {
+                        s.exit = CpuExit::memoryFault; break;
+                    }
+                } else {
+                    if (mem.read(static_cast<uint32_t>(address),
+                                 std::span<uint8_t>(data, width)) != MemoryFault::none) {
+                        s.exit = CpuExit::memoryFault; break;
+                    }
+                    uint64_t value = 0;
+                    for (unsigned i = 0; i < width; ++i)
+                        value |= uint64_t(data[i]) << (8 * i);
+                    s.gpr[src] = value;
+                }
+                s.rip = pc;
+                continue;
+            }
+            if ((modrm & 0xc0) != 0xc0) { s.exit = CpuExit::unsupported; break; }
             const uint64_t a = s.gpr[dst] & mask, b = s.gpr[src] & mask;
             if (op == 0x31) { s.gpr[dst] = (a ^ b) & mask; s.zf = s.gpr[dst] == 0; }
             if (op == 0x89) s.gpr[dst] = b;
