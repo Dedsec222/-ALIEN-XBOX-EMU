@@ -72,6 +72,14 @@ MappedPe mapPe(std::span<const uint8_t> file) {
         return uint32_t(u16(p)) | (uint32_t(u16(p+2)) << 16);
     };
     const size_t pe = u32(0x3c), opt = pe + 24;
+    // No import resolver, relocation engine or OS service layer exists yet.
+    // Reject images requiring those services rather than pretending to run them.
+    const uint32_t directories = u32(opt + 108);
+    for (uint32_t i = 0; i < directories; ++i) {
+        if (u32(opt + 112 + size_t(i) * 8) ||
+            u32(opt + 116 + size_t(i) * 8))
+            return {{}, 0, "PE data directories are not supported yet"};
+    }
     const uint32_t headerSize = u32(opt + 60);
     const size_t table = opt + u16(pe + 20);
     MappedPe result{};
