@@ -33,7 +33,7 @@ PeInfo inspectPe(std::span<const uint8_t> file) {
     if (!info.sections || info.sections > 96 || !info.imageSize ||
         !alignment || headerSize > info.imageSize || headerSize > file.size())
         return fail("Invalid image dimensions");
-    if (count > (optSize-112)/8) return fail("Truncated data directories");
+    if (count > (uint32_t(optSize) - 112u) / 8u) return fail("Truncated data directories");
     if (count > 1) info.importsRva = u32(opt+112+8);
     if (count > 5) info.relocationsRva = u32(opt+112+5*8);
     const uint64_t table = opt + optSize;
