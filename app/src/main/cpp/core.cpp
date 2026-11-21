@@ -61,7 +61,9 @@ Java_com_dedsec_alienxbox_MainActivity_execute(JNIEnv* env, jclass, jbyteArray p
     if (env->ExceptionCheck()) return nullptr;
     const auto image = genesis::loadPe(file);
     if (image.error) return env->NewStringUTF(image.error);
-    const auto cpu = genesis::interpret(image.code, std::clamp(budget, 1000, 100000), image.entry, choice, target);
+    const auto mapped = genesis::mapPe(file);
+    if (mapped.error) return env->NewStringUTF(mapped.error);
+    const auto cpu = genesis::interpret(mapped.bytes, std::clamp(budget, 1000, 100000), mapped.entryRva, choice, target);
     std::ostringstream report;
     switch (cpu.stop) {
     case genesis::Stop::breakpoint:
@@ -73,7 +75,7 @@ Java_com_dedsec_alienxbox_MainActivity_execute(JNIEnv* env, jclass, jbyteArray p
     case genesis::Stop::truncated: report << "Truncated instruction"; break;
     case genesis::Stop::invalidTarget: report << "Invalid branch target"; break;
     }
-    report << "\nRIP (RVA) 0x" << std::hex << image.sectionRva+cpu.rip << std::dec
+    report << "\nRIP (RVA) 0x" << std::hex << cpu.rip << std::dec
            << "   EAX " << cpu.eax << "\nInstructions " << cpu.steps;
     return env->NewStringUTF(report.str().c_str());
 }
