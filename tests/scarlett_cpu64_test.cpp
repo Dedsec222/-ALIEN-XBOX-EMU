@@ -24,6 +24,22 @@ int main() {
     assert(limited.gpr[0]==42);
     auto fault=executeGuest64(mem,base+4096);
     assert(fault.exit==Cpu64Exit::memoryFault);
+    // sub rsp,40; call +1; add rsp,40; int3; ret
+    GuestMemory64 stackMem;
+    assert(stackMem.map(base,4096,GuestMemory64::Read|GuestMemory64::Execute)==GuestMemory64::Fault::none);
+    constexpr uint64_t stack=0x700000000000ull;
+    assert(stackMem.map(stack,4096,GuestMemory64::Read|GuestMemory64::Write)==GuestMemory64::Fault::none);
+    constexpr std::array<uint8_t,15> calls={
+        0x48,0x83,0xec,0x28,0xe8,0x05,0,0,0,
+        0x48,0x83,0xc4,0x28,0xcc,0xc3
+    };
+    // call targets RET at offset 14, then returns to ADD at offset 9.
+    assert(stackMem.initialize(base,calls)==GuestMemory64::Fault::none);
+    auto called=executeGuest64(stackMem,base,32,stack+4096);
+    assert(called.exit==Cpu64Exit::breakpoint);
+    assert(called.steps==5);
+    assert(called.gpr[4]==stack+4096);
+    assert(called.rip==base+14);
     std::cout<<"SCARLETT CPU64 EXECUTION PASSED: RAX="<<s.gpr[0]
              <<" steps="<<s.steps<<" RIP=0x"<<std::hex<<s.rip<<"\n";
 }
