@@ -34,7 +34,12 @@ int main(int argc, char** argv) {
     for(auto b:entry) std::cout<<" "<<std::setw(2)<<std::setfill('0')<<unsigned(b);
     std::cout<<"\n";
     // Guest-only bounded execution: no host syscall or native code execution.
-    const auto state=genesis::executeGuest64(memory,pe.entry,32);
+    const uint64_t stackBase=0x700000000000ull;
+    if(memory.map(stackBase,65536,genesis::GuestMemory64::Read|
+        genesis::GuestMemory64::Write)!=genesis::GuestMemory64::Fault::none) {
+        std::cerr<<"Cannot map guest stack\\n";return 1;
+    }
+    const auto state=genesis::executeGuest64(memory,pe.entry,32,stackBase+65536);
     const char* exit="budget";
     switch(state.exit) {
         case genesis::Cpu64Exit::breakpoint: exit="breakpoint";break;
