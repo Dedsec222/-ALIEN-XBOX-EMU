@@ -27,6 +27,8 @@ PeInfo inspectPe(std::span<const uint8_t> file) {
         return fail("Invalid PE32+ optional header");
     info.entryRva = u32(opt+16);
     info.imageSize = u32(opt+56);
+    info.imageBase = uint64_t(u32(opt+24)) |
+                     (uint64_t(u32(opt+28)) << 32);
     const uint32_t headerSize = u32(opt+60);
     const uint32_t alignment = u32(opt+32);
     const uint32_t count = u32(opt+108);

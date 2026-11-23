@@ -14,6 +14,7 @@ int main() {
     assert(!metadata.error);
     assert(metadata.sections >= 1);
     assert(metadata.imageSize > metadata.entryRva);
+    assert(metadata.imageBase != 0);
     const auto mapped = genesis::mapPe(file);
     assert(!mapped.error);
     assert(mapped.bytes.size() == metadata.imageSize);

@@ -14,6 +14,7 @@ struct PeInfo {
     uint16_t sections = 0;
     uint32_t entryRva = 0;
     uint32_t imageSize = 0;
+    uint64_t imageBase = 0;
     uint32_t importsRva = 0;
     uint32_t relocationsRva = 0;
     const char* error = nullptr;
