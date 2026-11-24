@@ -1,5 +1,7 @@
 #pragma once
 #include "scarlett_calendar.hpp"
+#include "scarlett_runtime64.hpp"
+#include <ctime>
 #include "scarlett_files.hpp"
 #include <cstdio>
 #include <cmath>
@@ -22,7 +24,7 @@ class ScarlettImports64 {
     mutable GuestFiles guestFiles;
 public:
     static constexpr uint64_t StubBase = 0x600000000000ull;
-    static constexpr uint64_t StubSize = 4096;
+    static constexpr uint64_t StubSize = 8192;
 
     static constexpr uint64_t CrtBase=0x740000000000ull;
     bool install(GuestMemory64& memory) {
@@ -228,6 +230,12 @@ public:
         }
         if (dll=="api-ms-win-crt-math-l1-1-0.dll" && symbol=="nexttowardf") address=StubBase+0xfc0;
         if (dll=="api-ms-win-crt-time-l1-1-0.dll" && symbol=="_difftime64") address=StubBase+0xfd0;
+        if (dll=="api-ms-win-core-processthreads-l1-1-1.dll" && symbol=="GetCurrentThreadStackLimits") address=StubBase+0xfe0;
+        if (dll=="api-ms-win-crt-time-l1-1-0.dll") {
+            if(symbol=="_gmtime64_s") address=StubBase+0xff0;
+            if(symbol=="_localtime64_s") address=StubBase+0x1000;
+            if(symbol=="_ftime64") address=StubBase+0x1010;
+        }
         // Experimental observed-callsite profile, disabled by default.
         if(std::getenv("ALIEN_XBOX_MEMORY_EXPERIMENT")) {
             if(dll=="d3d12_xs.dll" && symbol=="D3D12ConfigureVirtualMemoryX") address=StubBase+0xc70;
@@ -271,6 +279,7 @@ public:
             return false;
 
         const auto& n=it->second;
+        using F=GuestMemory64::Fault;
         // Conservative guest capability profile: no complete optional ISA
         // feature groups or Windows fast-fail facility are implemented yet.
         if(n=="IsProcessorFeaturePresent") {rax=0;return true;}
@@ -286,13 +295,51 @@ public:
             return guestFiles.call(n,memory,rcx,rdx,r8,r9,rax,CrtBase+24);
         if(n=="_difftime64") {
             if (!fp) return false;
-            const double seconds=rcx>=rdx ? double(rcx-rdx) : -double(rdx-rcx);
+            double seconds=0;
+            if (int64_t(rcx)<=0 || int64_t(rdx)<=0) {
+                if (handlers["_set_invalid_parameter_handler"]) return false;
+                if (memory.write(CrtBase+24,std::array<uint8_t,4>{22,0,0,0})!=F::none) return false;
+            } else seconds=rcx>=rdx ? double(rcx-rdx) : -double(rdx-rcx);
             std::memcpy(fp->data(),&seconds,sizeof(seconds));
             return true;
         }
+        if(n=="GetCurrentThreadStackLimits") {
+            uint64_t low=0,high=0;
+            if (!ScarlettRuntime64::readValue(memory,ScarlettRuntime64::Teb+0x10,8,low) ||
+                !ScarlettRuntime64::readValue(memory,ScarlettRuntime64::Teb+8,8,high) ||
+                memory.check(rcx,8,GuestMemory64::Write)!=F::none ||
+                memory.check(rdx,8,GuestMemory64::Write)!=F::none) return false;
+            return ScarlettRuntime64::put64(memory,rcx,low) && ScarlettRuntime64::put64(memory,rdx,high);
+        }
+        if(n=="_ftime64") {
+            const auto ms=std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count();
+            const int64_t seconds=ms/1000;
+            const uint16_t fraction=ms%1000;
+            std::array<uint8_t,16> output{};
+            std::memcpy(output.data(),&seconds,8);
+            std::memcpy(output.data()+8,&fraction,2);
+            return memory.write(rcx,output)==F::none;
+        }
+        if(n=="_gmtime64_s" || n=="_localtime64_s") {
+            int64_t value=0;
+            std::array<int32_t,9> fields;
+            if (!rcx || !rdx || memory.read(rdx,std::span<uint8_t>(reinterpret_cast<uint8_t*>(&value),8))!=F::none) return false;
+            const std::time_t timestamp=value;
+            std::tm date{};
+            if (value<0 || value>32535215999LL || !gmtime_r(&timestamp,&date)) {
+                if (handlers["_set_invalid_parameter_handler"] ||
+                    memory.write(CrtBase+24,std::array<uint8_t,4>{22,0,0,0})!=F::none)return false;
+                fields.fill(-1);
+                rax=22;
+            } else {
+                fields={date.tm_sec,date.tm_min,date.tm_hour,date.tm_mday,date.tm_mon,date.tm_year,date.tm_wday,date.tm_yday,0};
+                rax=0;
+            }
+            return memory.write(rcx,std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(fields.data()),sizeof(fields)))==F::none;
+        }
         if(n=="srand") {randomState=uint32_t(rcx);return true;}
         if(n=="rand") {randomState=randomState*214013u+2531011u;rax=(randomState>>16)&0x7fffu;return true;}
-        using F=GuestMemory64::Fault;
         auto put=[&](uint64_t a,uint64_t v){std::array<uint8_t,8> b{}; for(unsigned i=0;i<8;++i)b[i]=uint8_t(v>>(8*i)); return memory.write(a,b)==F::none;};
         if(n=="_fdtest"||n=="_dtest") {
             double v;

@@ -5,7 +5,7 @@
 #include <sstream>
 
 namespace genesis {
-inline std::string launchScarlett(std::span<const uint8_t> file, uint64_t budget) {
+inline std::string launchScarlett(std::span<const uint8_t> file, uint64_t budget,bool translate=false) {
     GuestMemory64 memory;
     const auto image=loadScarlettPe(file,memory);
     if (!image.error.empty()) return image.error;
@@ -18,7 +18,8 @@ inline std::string launchScarlett(std::span<const uint8_t> file, uint64_t budget
     if (memory.map(stack,size,3)!=GuestMemory64::Fault::none ||
         !ScarlettRuntime64::put64(memory,rsp,sentinel) ||
         !ScarlettRuntime64{}.install(memory,image.imageBase,stack,size)) return "Guest stack or TLS initialization failed";
-    const auto cpu=executeGuest64(memory,image.entry,budget,rsp,&imports,ScarlettRuntime64::Teb,0,sentinel);
+    Arm64Blocks blocks;
+    const auto cpu=executeGuest64(memory,image.entry,budget,rsp,&imports,ScarlettRuntime64::Teb,0,sentinel,0,nullptr,translate?&blocks:nullptr);
     std::ostringstream out;
     const char* reason="Instruction budget exhausted";
     switch (cpu.exit) {
@@ -30,6 +31,7 @@ inline std::string launchScarlett(std::span<const uint8_t> file, uint64_t budget
     }
     out<<reason<<"\nScarlett V78 interpreter\nRIP 0x"<<std::hex<<cpu.rip<<"\nRAX 0x"<<cpu.gpr[0]
        <<"\nInstructions "<<std::dec<<cpu.steps<<"\nCommitted guest pages "<<memory.committedPages();
+    if (translate) out<<"\nARM64 blocks compiled "<<blocks.translations<<", executed "<<blocks.calls;
     return out.str();
 }
 }

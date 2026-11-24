@@ -6,6 +6,7 @@ namespace genesis {
 struct BlockTrace {
     unsigned depth;
     bool enabled;
+    bool opcodes;
     uint64_t first=0,last=0,count=0;
     void flush() {
         if (!count) return;
@@ -36,7 +37,20 @@ struct BlockTrace {
         uint64_t rip,before;
         const uint64_t& after;
         bool ends;
+        std::array<uint8_t,15> bytes;
+        unsigned length=0;
+        Instruction(BlockTrace& owner,uint64_t pc,const uint64_t& steps,const GuestMemory64& memory):
+            trace(owner),rip(pc),before(steps),after(steps),ends(owner.enabled && owner.terminator(memory,pc)) {
+            if(owner.opcodes)while(length<bytes.size() && pc<=UINT64_MAX-length &&
+                                  memory.fetchByte(pc+length,bytes[length])) ++length;
+        }
         ~Instruction(){
+            if(trace.opcodes && before!=after) {
+                char hex[31]{};
+                constexpr char digits[]="0123456789abcdef";
+                for(unsigned i=0;i<length;++i){hex[2*i]=digits[bytes[i]>>4];hex[2*i+1]=digits[bytes[i]&15];}
+                std::fprintf(stderr,"RETIRED bytes=%s\n",hex);
+            }
             if (!trace.enabled || before==after) return;
             if (!trace.count)trace.first=rip;
             trace.last=rip;

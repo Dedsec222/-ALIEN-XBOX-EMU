@@ -14,7 +14,10 @@ run_one() {
         scarlett_import_entry_test|scarlett_real_pe_test) args=(app/src/main/assets/doors.exe);;
     esac
     "$CXX" -std=c++20 -Wall -Wextra -Werror -Iapp/src/main/cpp "$file" "${extra[@]}" -o "$exe" >"$exe.log" 2>&1 &&
-        "$exe" "${args[@]}" >>"$exe.log" 2>&1 && { echo "PASS $name"; return 0; }
+        "$exe" "${args[@]}" >>"$exe.log" 2>&1 && { if [[ -n "${COVERAGE_DIR:-}" ]]; then
+            awk '/^RETIRED bytes=/{print $2}' "$exe.log" | sort -u > "$COVERAGE_DIR/$name.txt"
+        fi
+        echo "PASS $name"; return 0; }
     echo "FAIL $name"
     cat "$exe.log"
     return 1

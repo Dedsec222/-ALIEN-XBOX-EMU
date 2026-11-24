@@ -130,7 +130,7 @@ Java_com_dedsec_alienxbox_MainActivity_execute(JNIEnv* env, jclass, jbyteArray p
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_dedsec_alienxbox_MainActivity_mappedImage(JNIEnv* env,jclass,jobject buffer,jboolean run,jint budget) {
+Java_com_dedsec_alienxbox_MainActivity_mappedImage(JNIEnv* env,jclass,jobject buffer,jboolean run,jint budget,jboolean translate) {
     const auto length=env->GetDirectBufferCapacity(buffer);
     auto data=static_cast<const uint8_t*>(env->GetDirectBufferAddress(buffer));
     if (!data || length<=0 || length>(256LL<<20)) return env->NewStringUTF("Invalid mapped PE");
@@ -148,7 +148,7 @@ Java_com_dedsec_alienxbox_MainActivity_mappedImage(JNIEnv* env,jclass,jobject bu
             result<<reasons[static_cast<unsigned>(state.exit)]<<"\nRIP 0x"<<std::hex<<state.rip<<"\nRAX 0x"<<state.gpr[0]<<"\nInstructions "<<std::dec<<state.steps;
             return env->NewStringUTF(result.str().c_str());
         }
-        const auto result=genesis::launchScarlett(file,std::clamp(budget,1000,10000000));
+        const auto result=genesis::launchScarlett(file,std::clamp(budget,1000,10000000),translate);
         return env->NewStringUTF(result.c_str());
     } catch (const std::bad_alloc&) {return env->NewStringUTF("Host memory exhausted while mapping guest");}
 }

@@ -1,8 +1,10 @@
 #pragma once
 #include "guest_memory64.hpp"
 #include "scarlett_blocks.hpp"
+#include "scarlett_arm64.hpp"
 #include "scarlett_imports64.hpp"
 #include <array>
+#include <atomic>
 #include <bit>
 #include <cmath>
 #include <cstring>
@@ -28,7 +30,7 @@ inline Cpu64State executeGuest64(GuestMemory64& memory, uint64_t entry,
                                 const ScarlettImports64* imports=nullptr,
                                 uint64_t gsBase=0,
                                 uint64_t fsBase=0, uint64_t stopRip=0, unsigned depth=0,
-                                const Cpu64State* initial=nullptr) {
+                                const Cpu64State* initial=nullptr, Arm64Blocks* backend=nullptr) {
     Cpu64State s=initial?*initial:Cpu64State{};
     s.steps=0; s.exit=Cpu64Exit::budget;
     s.rip=entry;
@@ -38,11 +40,12 @@ inline Cpu64State executeGuest64(GuestMemory64& memory, uint64_t entry,
         ++pc;
         return true;
     };
-    BlockTrace blocks{depth,std::getenv("ALIEN_BLOCK_TRACE")!=nullptr};
+    BlockTrace blocks{depth,std::getenv("ALIEN_BLOCK_TRACE")!=nullptr,std::getenv("ALIEN_OPCODE_TRACE")!=nullptr};
     const bool traceInstructions = std::getenv("ALIEN_INSN_TRACE") != nullptr;
     for (;s.steps<budget;) {
         if(stopRip && s.rip==stopRip) break;
-        BlockTrace::Instruction retired{blocks,s.rip,s.steps,s.steps,blocks.enabled && blocks.terminator(memory,s.rip)};
+        if (backend && !blocks.enabled && !blocks.opcodes && !traceInstructions && backend->run(memory,s.rip,s.gpr,s.steps,budget,stopRip)) continue;
+        BlockTrace::Instruction retired{blocks,s.rip,s.steps,memory};
         if(traceInstructions) std::fprintf(stderr,"INSN depth=%u step=%llu rip=%llx rax=%llx rcx=%llx rdx=%llx zf=%u cf=%u\n",unsigned(depth),(unsigned long long)s.steps,(unsigned long long)s.rip,(unsigned long long)s.gpr[0],(unsigned long long)s.gpr[1],(unsigned long long)s.gpr[2],unsigned(s.zf),unsigned(s.cf));
         uint64_t pc=s.rip;
         uint8_t op=0,rex=0;
@@ -227,11 +230,13 @@ inline Cpu64State executeGuest64(GuestMemory64& memory, uint64_t entry,
             return o.addr+(o.relative?pc:0)+segmentBase;
         };
         // Packed minima and maxima share lane semantics between SSE and VEX.
-        auto minMax = [&](unsigned map, uint8_t ext, unsigned width, int source) {
+        auto packedInteger = [&](unsigned map, uint8_t ext, unsigned width, int source) {
             const bool extended = map == 2 && ext >= 0x38 && ext <= 0x3f;
             const bool basic = map == 1 && (ext == 0xda || ext == 0xde ||
                                             ext == 0xea || ext == 0xee);
-            if (!basic && !extended) return false;
+            const bool horizontal = map==2 && (ext==1 || ext==2 || ext==3 || ext==5 || ext==6 || ext==7);
+            const bool multiply = map==2 && (ext==4 || ext==0x0b);
+            if (!basic && !extended && !horizontal && !multiply) return false;
             const unsigned type = ext & 3;
             const unsigned lane = extended ? (type == 0 ? 1 : type == 2 ? 2 : 4)
                                            : (ext >= 0xe0 ? 2 : 1);
@@ -258,7 +263,45 @@ inline Cpu64State executeGuest64(GuestMemory64& memory, uint64_t entry,
                     return true;
                 }
             }
-            for (unsigned i=0; i<width; i+=lane) {
+            for (unsigned base=0; (horizontal || multiply) && base<width; base+=16) {
+                const auto lhs=base?s.ymmHigh[left]:s.xmm[left]; // preserve destructive legacy input
+                auto& dst=base?s.ymmHigh[dest]:s.xmm[dest];
+                auto word=[](const uint8_t* source) {
+                    int16_t value;
+                    std::memcpy(&value,source,2);
+                    return int(value);
+                };
+                if (horizontal) {
+                    const unsigned bytes=(ext&3)==2?4:2;
+                    for(unsigned i=0;i<16;i+=bytes) {
+                        const auto* pair=(i<8?lhs.data():rhs.data()+base)+2*(i%8);
+                        uint32_t value=0;
+                        if (bytes==4) {
+                            uint32_t a,b;
+                            std::memcpy(&a,pair,4);std::memcpy(&b,pair+4,4);
+                            value=(ext&4)?a-b:a+b;
+                        } else {
+                            int a=word(pair), b=word(pair+2);
+                            int v=(ext&4)?a-b:a+b;
+                            value=(ext&3)==3?std::clamp(v,-32768,32767):v;
+                        }
+                        std::memcpy(dst.data()+i,&value,bytes);
+                    }
+                } else {
+                    for(unsigned i=0;i<16;i+=2) {
+                        int v;
+                        if (ext==4) {
+                            v=int(lhs[i])*int8_t(rhs[base+i])+int(lhs[i+1])*int8_t(rhs[base+i+1]);
+                            v=std::clamp(v,-32768,32767);
+                        } else {
+                            v=(word(lhs.data()+i)*word(rhs.data()+base+i)+0x4000)>>15;
+                        }
+                        const uint16_t bits=uint16_t(v);
+                        std::memcpy(dst.data()+i,&bits,2);
+                    }
+                }
+            }
+            for (unsigned i=0; (basic || extended) && i<width; i+=lane) {
                 const auto& src = i < 16 ? s.xmm[left] : s.ymmHigh[left];
                 auto& dst = i < 16 ? s.xmm[dest] : s.ymmHigh[dest];
                 uint32_t a=0,b=0;
@@ -276,6 +319,18 @@ inline Cpu64State executeGuest64(GuestMemory64& memory, uint64_t entry,
             const auto saved = pc;
             uint8_t ext;
             if (!fetch(pc,ext)) { s.exit=Cpu64Exit::memoryFault; break; }
+            if (!simdPrefix && !rex && ext==0xae) {
+                uint8_t modrm;
+                if(!fetch(pc,modrm)){s.exit=Cpu64Exit::memoryFault;break;}
+                if(modrm==0xe8 || modrm==0xf0 || modrm==0xf8) {
+                    // Strong ordering is valid for all three fences in the serial backend.
+                    std::atomic_thread_fence(std::memory_order_seq_cst);
+                    s.rip=pc;
+                    ++s.steps;
+                    continue;
+                }
+                pc=saved+1;
+            }
             if (ext >= 0xc8 && ext <= 0xcf && (!simdPrefix || (rex&8))) {
                 const unsigned reg=(ext&7)+((rex&1)?8:0);
                 if (rex&8) s.gpr[reg]=__builtin_bswap64(s.gpr[reg]);
@@ -311,7 +366,7 @@ inline Cpu64State executeGuest64(GuestMemory64& memory, uint64_t entry,
                     continue;
                 }
             }
-            if (simdPrefix==0x66 && minMax(map,ext,16,-1)) {
+            if (simdPrefix==0x66 && packedInteger(map,ext,16,-1)) {
                 if (s.exit==Cpu64Exit::memoryFault) break;
                 continue;
             }
@@ -334,7 +389,7 @@ inline Cpu64State executeGuest64(GuestMemory64& memory, uint64_t entry,
             const bool map3=op==0xc4&&(a&31)==3;
             // V76: AVX2 per-element shifts, packed sign and absolute value.
             const bool map2=op==0xc4&&(a&31)==2;
-            if (pp==1 && minMax(map1?1:map2?2:3,ext,n,int(src))) {
+            if (pp==1 && packedInteger(map1?1:map2?2:3,ext,n,int(src))) {
                 if (s.exit==Cpu64Exit::memoryFault) break;
                 continue;
             }

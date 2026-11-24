@@ -1,0 +1,25 @@
+name: Scarlett regression
+on: [push, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  host:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [g++, clang++]
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash tools/regression.sh
+        env:
+          CXX: ${{ matrix.compiler }}
+          JOBS: 3
+  arm64:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare native AArch64 blocks with the reference interpreter
+        run: |
+          c++ -O2 -std=c++20 -Wall -Wextra -Werror -Iapp/src/main/cpp tests/scarlett_v78_backend_test.cpp -o "$RUNNER_TEMP/backend"
+          "$RUNNER_TEMP/backend"

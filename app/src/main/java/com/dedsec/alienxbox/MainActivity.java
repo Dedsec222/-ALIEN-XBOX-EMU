@@ -21,12 +21,15 @@ public class MainActivity extends Activity {
     static { System.loadLibrary("alien_core"); }
     private static native String diagnostic();
     private static final int MAX_PE_BYTES=256<<20;
-    private static native String mappedImage(java.nio.ByteBuffer file,boolean run,int budget);
+    private static native String mappedImage(java.nio.ByteBuffer file,boolean run,int budget,boolean translate);
     private String mappedImage(File file,boolean run,int budget) throws IOException {
         try (java.nio.channels.FileChannel channel=new FileInputStream(file).getChannel()) {
             long size=channel.size();
             if(size==0 || size>MAX_PE_BYTES) throw new IOException("PE size outside supported range");
-            return mappedImage(channel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY,0,size),run,budget);
+            boolean translate=false;
+            try {translate=new JSONObject(prefs.getString("dashboardPreferences","{}")).optBoolean("armBlocks");}
+            catch(JSONException ignored){}
+            return mappedImage(channel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY,0,size),run,budget,translate);
         }
     }
     private static native String execute(byte[] file,int choice,int target,boolean bundled,int budget);
@@ -73,7 +76,7 @@ public class MainActivity extends Activity {
         web.addJavascriptInterface(new Bridge(),"Genesis");
         setContentView(web);
         io.execute(()->{
-            diagnostics=diagnostic();
+            diagnostics=diagnostic()+memoryPressure();
             String previous=prefs.getString("last_homebrew_uri","");
             if(!previous.isEmpty()){
                 try{importFile(Uri.parse(previous));prefs.edit().remove("last_homebrew_uri").apply();}
@@ -82,6 +85,12 @@ public class MainActivity extends Activity {
             event("updated","");
         });
         web.loadUrl(ROOT+"index.html");
+    }
+    private String memoryPressure() {
+        ActivityManager.MemoryInfo info=new ActivityManager.MemoryInfo();
+        getSystemService(ActivityManager.class).getMemoryInfo(info);
+        return "\nAvailable RAM "+(info.availMem>>20)+" MiB, pressure threshold "+(info.threshold>>20)
+            +" MiB, low memory "+info.lowMemory;
     }
     private static JSONObject obj(Object... kv){
         JSONObject result=new JSONObject();
@@ -229,7 +238,7 @@ public class MainActivity extends Activity {
             try{startActivityForResult(new Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/json")
                 .putExtra(Intent.EXTRA_TITLE,"alien-xbox-diagnostics.json"),3);}catch(ActivityNotFoundException e){event("error","Export unavailable.");}
         });}
-        @JavascriptInterface public void probe(){if(!closed)io.execute(()->{diagnostics=diagnostic();event("updated","Probe complete");});}
+        @JavascriptInterface public void probe(){if(!closed)io.execute(()->{diagnostics=diagnostic()+memoryPressure();event("updated","Probe complete");});}
         @JavascriptInterface public void haptic(){runOnUiThread(()->{if(!closed)web.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);});}
     }
     @Override protected void onActivityResult(int code,int result,Intent data){

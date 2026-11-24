@@ -2,6 +2,7 @@
 #include <vulkan/vulkan.h>
 #include <cstdint>
 #include <cstring>
+#include "scarlett_shader.hpp"
 
 namespace genesis {
 // Offscreen homebrew transfer. Every handle belongs to this probe's device.
@@ -9,10 +10,12 @@ struct ProbeResources {
     VkDevice device{};
     VkCommandPool pool{};
     VkFence fence{};
+    VkShaderModule shader{};
     VkBuffer buffer{};
     VkDeviceMemory memory{};
     ~ProbeResources() {
         if (!device) return;
+        if (shader) vkDestroyShaderModule(device,shader,nullptr);
         if (fence) vkDestroyFence(device,fence,nullptr);
         if (pool) vkDestroyCommandPool(device,pool,nullptr);
         if (buffer) vkDestroyBuffer(device,buffer,nullptr);
@@ -36,6 +39,13 @@ inline const char* verifyTransfer(VkPhysicalDevice gpu,uint32_t family) {
     deviceInfo.queueCreateInfoCount=1;
     deviceInfo.pQueueCreateInfos=&queueInfo;
     if(vkCreateDevice(gpu,&deviceInfo,nullptr,&r.device)!=VK_SUCCESS)return "device creation failed";
+    const auto spv=translateConstantPixel(greenPixel);
+    VkShaderModuleCreateInfo shaderInfo{};
+    shaderInfo.sType=VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    shaderInfo.codeSize=spv.size()*sizeof(uint32_t);
+    shaderInfo.pCode=spv.data();
+    if(spv.empty() || vkCreateShaderModule(r.device,&shaderInfo,nullptr,&r.shader)!=VK_SUCCESS)
+        return "constant pixel shader module failed";
     VkBufferCreateInfo buffer{};
     buffer.sType=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     buffer.size=length;
@@ -102,6 +112,6 @@ inline const char* verifyTransfer(VkPhysicalDevice gpu,uint32_t family) {
         ok=word==pattern;
     }
     vkUnmapMemory(r.device,r.memory);
-    return ok?"PASS (256 verified bytes)":"readback failed";
+    return ok?"PASS (pixel shader module and 256 transfer bytes)":"readback failed";
 }
 }

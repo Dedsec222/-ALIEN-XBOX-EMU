@@ -31,6 +31,23 @@ int main(){
     assert(mem.write(0x1020,view(unixEpoch))==F::none && call(tz,"FileTimeToSystemTime",0x1020,0x1040));
     std::array<uint16_t,8> date{};
     assert(mem.read(0x1040,view(date))==F::none && date[0]==1970 && date[1]==1 && date[2]==4 && date[3]==1);
+    const std::string timeDll="api-ms-win-crt-time-l1-1-0.dll";
+    int64_t epoch=0;
+    assert(mem.write(0x1100,view(epoch))==F::none);
+    std::array<int32_t,9> fields{};
+    for(auto n:{"_gmtime64_s","_localtime64_s"}) {
+        assert(call(timeDll,n,0x1200,0x1100)==0 && mem.read(0x1200,view(fields))==F::none);
+        assert((fields==std::array<int32_t,9>{0,0,0,1,0,70,4,0,0}));
+    }
+    assert(mem.map(ScarlettRuntime64::Teb,4096,3)==F::none);
+    assert(ScarlettRuntime64::put64(mem,ScarlettRuntime64::Teb+8,0x9000));
+    assert(ScarlettRuntime64::put64(mem,ScarlettRuntime64::Teb+16,0x8000));
+    call("api-ms-win-core-processthreads-l1-1-1.dll","GetCurrentThreadStackLimits",0x1200,0x1208);
+    uint64_t lo,hi;
+    assert(mem.read(0x1200,view(lo))==F::none && lo==0x8000);
+    assert(mem.read(0x1208,view(hi))==F::none && hi==0x9000);
+    call(timeDll,"_ftime64",0x1200);
+    assert(mem.read(0x1200,view(epoch))==F::none && epoch>0);
     const std::string io="api-ms-win-crt-stdio-l1-1-0.dll";
     assert(mem.write(0x1100,std::array<uint8_t,4>{'a','b','c',0})==F::none);
     assert(mem.write(0x1110,std::array<uint8_t,4>{'w','b','+',0})==F::none);

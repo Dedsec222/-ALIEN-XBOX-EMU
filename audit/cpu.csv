@@ -1,642 +1,642 @@
-disassembler_token,static_records,v78_operand_evidence
-movq,4076691,not classified by operand
-int3,3192131,not classified by operand
-movl,2256910,not classified by operand
-callq,1551198,not classified by operand
-leaq,1169398,not classified by operand
-je,1052765,not classified by operand
-popq,952930,not classified by operand
-pushq,833718,not classified by operand
-vmovaps,702493,not classified by operand
-jne,688157,not classified by operand
-jmp,652705,not classified by operand
-addq,643830,not classified by operand
-testq,603963,not classified by operand
-xorl,473806,not classified by operand
-movb,466886,not classified by operand
-cmpl,424762,not classified by operand
-retq,389567,not classified by operand
-subq,350279,not classified by operand
-testb,302772,not classified by operand
-cmpq,284707,not classified by operand
-vmovss,264157,not classified by operand
-vmovups,235213,not classified by operand
-cmpb,198411,not classified by operand
-andl,188174,not classified by operand
-vbroadcastss,181825,not classified by operand
-movzwl,178406,not classified by operand
-vmulps,173969,not classified by operand
-vxorps,148458,not classified by operand
-testl,145614,not classified by operand
-movw,105125,not classified by operand
-shlq,104160,not classified by operand
-shrl,87527,not classified by operand
-vshufps,85820,not classified by operand
-vhaddps,82468,not classified by operand
-vucomiss,80521,not classified by operand
-orb,80100,not classified by operand
-leal,79403,not classified by operand
-shll,78898,not classified by operand
-vblendps,77033,not classified by operand
-sete,73067,not classified by operand
-imulq,71350,not classified by operand
-movzbl,69196,not classified by operand
-andb,65361,not classified by operand
-orl,64461,not classified by operand
-incl,60118,not classified by operand
-vmulss,59543,not classified by operand
-movabsq,58045,not classified by operand
-cmpw,56183,not classified by operand
-decl,55114,not classified by operand
-imull,52516,not classified by operand
-lock,52249,not classified by operand
-vzeroupper,52204,not classified by operand
-andq,52170,not classified by operand
-jb,50438,not classified by operand
-incq,48689,not classified by operand
-shrq,48566,not classified by operand
-addl,48235,not classified by operand
-ja,47360,not classified by operand
-vfmadd213ps,46927,not classified by operand
-jae,46425,not classified by operand
-vfmadd231ps,45599,not classified by operand
-vblendvps,43316,not classified by operand
-jbe,42708,not classified by operand
-vmovdqa,42125,not classified by operand
-orq,41701,not classified by operand
-nop,40241,not classified by operand
-setne,40085,not classified by operand
-vaddps,37967,not classified by operand
-vandps,37549,not classified by operand
-vsubps,37293,not classified by operand
-movslq,35193,not classified by operand
-vpxor,32967,not classified by operand
-jo,31214,not classified by operand
-vmovsd,31180,not classified by operand
-vaddss,27217,not classified by operand
-vmovdqu,25446,not classified by operand
-vfmadd132ps,25327,not classified by operand
-vsubss,24856,not classified by operand
-vpackssdw,23480,not classified by operand
-jle,23203,not classified by operand
-bextrl,22467,not classified by operand
-vmovd,22236,not classified by operand
-vfmsub213ps,20545,not classified by operand
-vcmpltps,19812,not classified by operand
-subl,19615,not classified by operand
-js,18950,not classified by operand
-vmovq,18273,not classified by operand
-jg,18132,not classified by operand
-andnl,17772,not classified by operand
-vpmovmskb,17583,not classified by operand
-btl,17571,not classified by operand
-vrsqrtps,17216,not classified by operand
-vinsertps,17159,not classified by operand
-vpcmpeqd,16064,not classified by operand
-cmpxchgq,16038,not classified by operand
-vfmadd213ss,15450,not classified by operand
-vmaxss,14866,not classified by operand
-jl,14553,not classified by operand
-vshufpd,13953,not classified by operand
-jge,13556,not classified by operand
-vminss,13423,not classified by operand
-cmoveq,13370,not classified by operand
-vcvtsi2ss,13338,not classified by operand
-testw,13314,not classified by operand
-jno,12345,not classified by operand
-vcmpless,12273,not classified by operand
-jmpq,12146,not classified by operand
-xorb,11916,not classified by operand
-tzcntl,11818,not classified by operand
-vfnmadd213ps,11796,not classified by operand
-vcmpltss,11720,not classified by operand
-vcvtdq2ps,11682,not classified by operand
-divq,11086,not classified by operand
-vunpcklps,11041,not classified by operand
-setae,10973,not classified by operand
-vpextrb,10942,not classified by operand
-vcmpleps,10858,not classified by operand
-cmovbl,10650,not classified by operand
-decq,10457,not classified by operand
-cmovneq,10355,not classified by operand
-vfnmadd231ps,10313,not classified by operand
-vpand,10272,not classified by operand
-movswl,10161,not classified by operand
-vpsignb,10143,not classified by operand
-vdivss,10133,not classified by operand
-xorq,9987,not classified by operand
-cmpxchgl,9665,not classified by operand
-notb,9661,not classified by operand
-setb,9312,not classified by operand
-vrcpps,8907,not classified by operand
-vpbroadcastb,8903,not classified by operand
-vpbroadcastd,8748,not classified by operand
-vextracti128,8692,not classified by operand
-vmovmskps,8433,not classified by operand
-shrb,8263,not classified by operand
-cmovnel,7967,not classified by operand
-vmovlps,7921,not classified by operand
-vpor,7727,not classified by operand
-vcvttps2dq,7612,not classified by operand
-vpsrad,7531,not classified by operand
-cmovel,7510,not classified by operand
-vpcmpgtq,7501,not classified by operand
-vpcmpeqb,7446,not classified by operand
-blsrl,7379,not classified by operand
-vpbroadcastq,7238,not classified by operand
-cmovael,7104,not classified by operand
-vpunpckhwd,7098,not classified by operand
-vunpckhps,7001,not classified by operand
-vcvttss2si,6601,not classified by operand
-vmaxps,6589,not classified by operand
-vcmpeqps,6521,not classified by operand
-vfmadd132ss,6443,not classified by operand
-vtestps,6395,not classified by operand
-seta,6303,not classified by operand
-vorps,6226,not classified by operand
-vmovshdup,5795,not classified by operand
-vandnps,5689,not classified by operand
-vminps,5490,not classified by operand
-vpsubd,5338,not classified by operand
-addb,5229,not classified by operand
-setbe,5094,not classified by operand
-vcmpnltps,4993,not classified by operand
-vpunpcklqdq,4652,not classified by operand
-vroundps,4633,not classified by operand
-vrsqrtss,4577,not classified by operand
-jnp,4499,not classified by operand
-vfnmadd132ps,4496,not classified by operand
-adcq,4465,not classified by operand
-shlxq,4458,not classified by operand
-vpcmpeqq,4355,not classified by operand
-notl,4326,not classified by operand
-movdqu,4308,not classified by operand
-divl,4264,not classified by operand
-sarq,4066,not classified by operand
-sarl,3837,not classified by operand
-vfmadd231ss,3796,not classified by operand
-notq,3776,not classified by operand
-vpmovsxbq,3730,not classified by operand
-jns,3724,not classified by operand
-cmovbq,3607,not classified by operand
-setl,3601,not classified by operand
-vpacksswb,3527,not classified by operand
-shlb,3495,not classified by operand
-shlxl,3456,not classified by operand
-jp,3433,not classified by operand
-incb,3413,not classified by operand
-xchgl,3258,not classified by operand
-vptest,3195,not classified by operand
-vpshufd,3168,not classified by operand
-cmovgel,3163,not classified by operand
-negq,3141,not classified by operand
-sbbq,3129,not classified by operand
-decb,3099,not classified by operand
-mulxq,2886,not classified by operand
-cmovaeq,2855,not classified by operand
-vfmsub231ps,2835,not classified by operand
-por,2665,not classified by operand
-pand,2604,not classified by operand
-pause,2601,not classified by operand
-vpshufb,2572,not classified by operand
-vmovapd,2550,not classified by operand
-btq,2522,not classified by operand
-vinserti128,2461,not classified by operand
-cltq,2334,not classified by operand
-nopw,2270,not classified by operand
-movswq,2167,not classified by operand
-xaddl,2160,not classified by operand
-vpslld,2143,not classified by operand
-vcmpneqps,2045,not classified by operand
-cmoval,2022,not classified by operand
-vpextrd,1993,not classified by operand
-vfnmsub231ps,1991,not classified by operand
-vpaddw,1966,not classified by operand
-vcmpnleps,1963,not classified by operand
-vfnmsub213ps,1949,not classified by operand
-vfmsub132ps,1896,not classified by operand
-negl,1848,not classified by operand
-vmovlhps,1846,not classified by operand
-vpaddd,1844,not classified by operand
-vpblendd,1831,not classified by operand
-vextractps,1818,not classified by operand
-vpextrw,1808,not classified by operand
-movsbl,1798,not classified by operand
-vpermq,1794,not classified by operand
-vaesenc,1794,not classified by operand
-adcl,1751,not classified by operand
-vpmovzxwd,1719,not classified by operand
-vcvtph2ps,1673,not classified by operand
-vcvtps2ph,1630,not classified by operand
-nopl,1596,not classified by operand
-cmovll,1584,not classified by operand
-vcmplt_oqps,1574,not classified by operand
-pxor,1554,not classified by operand
-cmovaq,1521,not classified by operand
-vpshufhw,1438,not classified by operand
-adcxq,1409,not classified by operand
-vroundss,1400,not classified by operand
-orw,1400,not classified by operand
-vpinsrd,1380,not classified by operand
-vmovddup,1371,not classified by operand
-movdqa,1371,not classified by operand
-vpaddq,1331,not classified by operand
-movups,1325,not classified by operand
-sbbl,1314,not classified by operand
-cmovsq,1269,not classified by operand
-adoxq,1269,not classified by operand
-decw,1253,not classified by operand
-vxorpd,1242,not classified by operand
-setg,1229,not classified by operand
-vcmpeqss,1216,not classified by operand
-cmovlel,1151,not classified by operand
-shrxl,1150,not classified by operand
-mulq,1146,not classified by operand
-vpinsrb,1140,not classified by operand
-idivl,1120,not classified by operand
-incw,1086,not classified by operand
-vpinsrw,1081,not classified by operand
-btsq,1076,not classified by operand
-movsbq,1053,not classified by operand
-vucomisd,1047,not classified by operand
-roll,999,not classified by operand
-vsqrtss,984,not classified by operand
-vcvtss2sd,976,not classified by operand
-aesenc,975,not classified by operand
-vfnmadd213ss,973,not classified by operand
-setge,961,not classified by operand
-cmovgq,950,not classified by operand
-vmovupd,948,not classified by operand
-vpmaskmovd,944,not classified by operand
-cltd,935,not classified by operand
-vfnmsub132ps,923,not classified by operand
-rorxl,919,not classified by operand
-vpsrld,880,not classified by operand
-vpunpckldq,875,not classified by operand
-vcvtsi2ssl,871,not classified by operand
-vpsubw,865,not classified by operand
-vpclmulqdq,807,not classified by operand
-cmovnsq,799,not classified by operand
-cmovnsl,785,not classified by operand
-vpshuflw,784,not classified by operand
-bzhiq,755,not classified by operand
-cmovbel,746,not classified by operand
-vcvtsd2ss,737,not classified by operand
-andnq,727,not classified by operand
-paddd,705,not classified by operand
-setns,702,not classified by operand
-vmulsd,694,not classified by operand
-xchgb,691,not classified by operand
-vcmpnless,683,not classified by operand
-cmovlq,682,not classified by operand
-subb,675,not classified by operand
-vpermilps,667,not classified by operand
-cmovgeq,658,not classified by operand
-sets,650,not classified by operand
-pcmpeqd,647,not classified by operand
-vdivps,632,not classified by operand
-cmovgl,630,not classified by operand
-xchgq,629,not classified by operand
-pextq,626,not classified by operand
-setle,623,not classified by operand
-cmovsl,600,not classified by operand
-vpmovzxbd,596,not classified by operand
-vinsertf128,593,not classified by operand
-vcmpneqss,587,not classified by operand
-cmpxchgb,566,not classified by operand
-vextractf128,531,not classified by operand
-vpbroadcastw,523,not classified by operand
-vpextrq,495,not classified by operand
-andw,490,not classified by operand
-vcvtpd2ps,480,not classified by operand
-vpermpd,480,not classified by operand
-addw,476,not classified by operand
-vaddsd,473,not classified by operand
-vpmovsxwd,471,not classified by operand
-vpmovsxbd,471,not classified by operand
-vcvtsi2sd,454,not classified by operand
-vfmsub231ss,452,not classified by operand
-vpunpckhdq,445,not classified by operand
-vfmsub213ss,435,not classified by operand
-bextrq,431,not classified by operand
-cmovbeq,426,not classified by operand
-vunpckhpd,426,not classified by operand
-vfnmadd231ss,421,not classified by operand
-popcntl,417,not classified by operand
-vmovmskpd,408,not classified by operand
-rolq,404,not classified by operand
-cmovpl,379,not classified by operand
-btrl,372,not classified by operand
-vtestpd,365,not classified by operand
-shrxq,364,not classified by operand
-vsubsd,364,not classified by operand
-vbroadcastsd,362,not classified by operand
-btrq,341,not classified by operand
-vmaskmovps,340,not classified by operand
-aesdec,338,not classified by operand
-pclmulqdq,321,not classified by operand
-vcvttsd2si,313,not classified by operand
-vpsrlq,307,not classified by operand
-vcvtps2pd,304,not classified by operand
-vfnmsub213ss,304,not classified by operand
-vcvtdq2pd,303,not classified by operand
-vpsrldq,300,not classified by operand
-vpcmpgtd,298,not classified by operand
-vpmaskmovq,294,not classified by operand
-vpmovsxdq,292,not classified by operand
-vpunpcklwd,290,not classified by operand
-vfnmadd132ss,290,not classified by operand
-sbbb,286,not classified by operand
-xorps,284,not classified by operand
-vphaddd,277,not classified by operand
-vfmadd213sd,274,not classified by operand
-vcmpnltss,270,not classified by operand
-negb,268,not classified by operand
-vpslldq,259,not classified by operand
-lzcntl,255,not classified by operand
-vpmovzxdq,255,not classified by operand
-vpandn,251,not classified by operand
-vunpcklpd,249,not classified by operand
-vpsrlw,249,not classified by operand
-movbeq,248,see scarlett_v78_test.cpp
-pshufd,248,not classified by operand
-vandpd,242,not classified by operand
-setnp,240,not classified by operand
-rorxq,236,not classified by operand
-vpermps,233,not classified by operand
-setp,232,not classified by operand
-shldq,222,not classified by operand
-vfmadd213pd,218,not classified by operand
-vpblendw,209,not classified by operand
-bswapq,206,see scarlett_v78_test.cpp
-psrld,201,not classified by operand
-pslld,201,not classified by operand
-vsubpd,196,not classified by operand
-vmovlpd,193,not classified by operand
-vpsllvd,192,not classified by operand
-vhsubps,188,not classified by operand
-vmulpd,184,not classified by operand
-pslldq,184,not classified by operand
-vcvtps2dq,182,not classified by operand
-sarb,176,not classified by operand
-vpmaxsd,176,see scarlett_v78_test.cpp
-subw,175,not classified by operand
-vpsllq,173,not classified by operand
-vmaxsd,171,not classified by operand
-psrldq,169,not classified by operand
-vblendpd,166,not classified by operand
-pshufb,163,not classified by operand
-vpsadbw,162,not classified by operand
-vpermd,156,not classified by operand
-vpmulld,156,not classified by operand
-vdivsd,152,not classified by operand
-btsl,147,not classified by operand
-vpminud,145,see scarlett_v78_test.cpp
-vbroadcastf128,143,not classified by operand
-movsd,142,not classified by operand
-rolb,139,not classified by operand
-vfmadd231sd,138,not classified by operand
-vaesenclast,138,not classified by operand
-vpsrlvd,133,not classified by operand
-vpminsd,127,see scarlett_v78_test.cpp
-vpsubq,124,not classified by operand
-vblendvpd,122,not classified by operand
-vpmaxuw,121,see scarlett_v78_test.cpp
-vpaddb,107,not classified by operand
-vrcpss,106,not classified by operand
-tzcntq,103,not classified by operand
-adcb,103,not classified by operand
-vfnmsub231ss,100,not classified by operand
-vfmadd231pd,97,not classified by operand
-xchgw,95,not classified by operand
-cwtl,95,not classified by operand
-vorpd,95,not classified by operand
-vroundsd,94,not classified by operand
-idivq,94,not classified by operand
-movbel,94,see scarlett_v78_test.cpp
-xorw,93,not classified by operand
-blsil,93,not classified by operand
-cqto,93,not classified by operand
-vfmsub132ss,93,not classified by operand
-vcvtsi2sdl,92,not classified by operand
-vmovhps,88,not classified by operand
-movbew,80,see scarlett_v78_test.cpp
-vbroadcasti128,80,not classified by operand
-vpermilpd,80,not classified by operand
-shrdq,80,not classified by operand
-divw,79,not classified by operand
-bzhil,78,not classified by operand
-vpmovzxbw,78,not classified by operand
-prefetcht1,76,not classified by operand
-aesenclast,75,not classified by operand
-prefetchnta,73,not classified by operand
-vpsllvq,71,not classified by operand
-vpackuswb,70,not classified by operand
-cmovleq,69,not classified by operand
-vpackusdw,67,not classified by operand
-lzcntq,66,not classified by operand
-blsiq,56,not classified by operand
-cmpxchg16b,56,not classified by operand
-vpmaxud,56,see scarlett_v78_test.cpp
-vfmadd132sd,56,not classified by operand
-vcmpltsd,56,not classified by operand
-vpcmpeqw,55,not classified by operand
-vaddpd,54,not classified by operand
-vhaddpd,54,not classified by operand
-vpinsrq,54,not classified by operand
-movaps,54,not classified by operand
-vminsd,53,not classified by operand
-vpmaddwd,52,not classified by operand
-vpmovsxwq,49,not classified by operand
-xaddb,48,not classified by operand
-shrw,48,not classified by operand
-vpblendvb,45,not classified by operand
-vpmovsxbw,45,not classified by operand
-vcvtpd2psy,44,not classified by operand
-vperm2f128,43,not classified by operand
-mull,43,not classified by operand
-vmovntps,42,not classified by operand
-popcntq,41,not classified by operand
-vpsrlvq,41,not classified by operand
-vfmsub231sd,41,not classified by operand
-bswapl,38,see scarlett_v78_test.cpp
-vpsllw,38,not classified by operand
-vmovhpd,38,not classified by operand
-vpmuludq,37,not classified by operand
-mfence,36,not classified by operand
-divb,36,not classified by operand
-vsqrtps,34,not classified by operand
-vfnmadd231sd,34,not classified by operand
-vsqrtsd,32,not classified by operand
-movd,31,not classified by operand
-aeskeygenassist,31,not classified by operand
-vmovsldup,30,not classified by operand
-sarxl,28,not classified by operand
-aesdeclast,26,not classified by operand
-psllq,25,not classified by operand
-psrlq,25,not classified by operand
-vdivpd,24,not classified by operand
-vpmullw,23,not classified by operand
-xaddq,21,not classified by operand
-vcmpltpd,21,not classified by operand
-vperm2i128,21,not classified by operand
-sfence,20,not classified by operand
-vcvttpd2dq,19,not classified by operand
-insertq,19,not classified by operand
-rorl,19,not classified by operand
-vcvtpd2psx,18,not classified by operand
-rorb,18,not classified by operand
-rolw,18,not classified by operand
-negw,17,not classified by operand
-vpmuldq,17,not classified by operand
-vpminub,17,see scarlett_v78_test.cpp
-vpmovzxbq,16,not classified by operand
-cmovsw,16,not classified by operand
-vpmaxub,16,see scarlett_v78_test.cpp
-shldl,15,not classified by operand
-vpunpcklbw,15,not classified by operand
-cmovnoq,15,not classified by operand
-vcmplesd,15,not classified by operand
-cmovpq,14,not classified by operand
-vcvtsi2sdq,14,not classified by operand
-pinsrq,14,not classified by operand
-sbbw,13,not classified by operand
-vcmpeqsd,13,not classified by operand
-vaesimc,13,not classified by operand
-vpunpckhbw,13,not classified by operand
-prefetcht0,12,not classified by operand
-vfmsub231pd,12,not classified by operand
-vcmpneq_oqps,11,not classified by operand
-vmaxpd,11,not classified by operand
-btcq,11,not classified by operand
-vpalignr,11,not classified by operand
-vmovntdq,11,not classified by operand
-seto,10,not classified by operand
-adcw,10,not classified by operand
-vpsubusw,10,not classified by operand
-clzero,10,not classified by operand
-vcmpordps,9,not classified by operand
-vcmpneq_oqss,9,not classified by operand
-vcmplepd,9,not classified by operand
-shlw,9,not classified by operand
-cpuid,9,not classified by operand
-vfmadd132pd,9,not classified by operand
-bsrq,9,not classified by operand
-psrad,9,not classified by operand
-lfence,8,not classified by operand
-setno,8,not classified by operand
-clwb,8,not classified by operand
-cvtsi2sd,8,not classified by operand
-shufpd,8,not classified by operand
-vfnmadd213sd,7,not classified by operand
-vfnmsub132ss,7,not classified by operand
-vcvtsi2ssq,7,not classified by operand
-vpunpckhqdq,7,not classified by operand
-vsqrtpd,7,not classified by operand
-comisd,7,not classified by operand
-vaddsubps,6,not classified by operand
-vpabsd,6,not classified by operand
-vandnpd,6,not classified by operand
-vpcmpgtw,6,not classified by operand
-vcmpeqpd,6,not classified by operand
-vfnmsub231sd,6,not classified by operand
-cvtsi2ss,6,not classified by operand
-rep,6,not classified by operand
-addsd,6,not classified by operand
-btw,6,not classified by operand
-pinsrd,6,not classified by operand
-notw,5,not classified by operand
-vpminuw,5,see scarlett_v78_test.cpp
-vpmovzxwq,5,not classified by operand
-vcmpneqsd,5,not classified by operand
-vfnmadd231pd,5,not classified by operand
-vcmpunordps,5,not classified by operand
-prefetchw,5,not classified by operand
-mulsd,5,not classified by operand
-mulb,4,not classified by operand
-vphsubd,4,not classified by operand
-vfmsub132sd,4,not classified by operand
-vcmpeq_uqps,4,not classified by operand
-cmovnew,4,not classified by operand
-vfmsub213pd,4,not classified by operand
-blsrq,4,not classified by operand
-vphminposuw,4,not classified by operand
-cvtdq2pd,4,not classified by operand
-cmovnsw,3,not classified by operand
-idivw,3,not classified by operand
-vfnmsub231pd,3,not classified by operand
-vcmpnlesd,3,not classified by operand
-vroundpd,3,not classified by operand
-imulw,3,not classified by operand
-cmovol,3,not classified by operand
-vcmpneqpd,3,not classified by operand
-vhsubpd,3,not classified by operand
-vpsubb,3,not classified by operand
-sarxq,3,not classified by operand
-vpminsw,3,see scarlett_v78_test.cpp
-vpmaxsw,3,see scarlett_v78_test.cpp
-int,3,not classified by operand
-addss,3,not classified by operand
-comiss,3,not classified by operand
-vmaskmovpd,3,not classified by operand
-vminpd,2,not classified by operand
-cmovnpq,2,not classified by operand
-movzbw,2,not classified by operand
-vpsravd,2,not classified by operand
-vpcmpgtb,2,not classified by operand
-vfnmsub213pd,2,not classified by operand
-vfnmadd132sd,2,not classified by operand
-cmovew,2,not classified by operand
-xgetbv,2,not classified by operand
-cmovnol,2,not classified by operand
-vpabsw,2,not classified by operand
-cmovoq,2,not classified by operand
-shldw,2,not classified by operand
-vfmaddsub231ps,2,not classified by operand
-vfnmadd213pd,2,not classified by operand
-rorq,2,not classified by operand
-idivb,2,not classified by operand
-monitorx,2,not classified by operand
-mwaitx,2,not classified by operand
-movabsb,2,not classified by operand
-movabsl,2,not classified by operand
-inb,2,not classified by operand
-divss,2,not classified by operand
-cvttsd2si,2,not classified by operand
-subsd,2,not classified by operand
-divsd,2,not classified by operand
-pcmpeqb,2,not classified by operand
-pmovmskb,2,not classified by operand
-vcmpnltpd,1,not classified by operand
-vcmpordss,1,not classified by operand
-vcmpeq_uqss,1,not classified by operand
-vpsraw,1,not classified by operand
-vcmpunordss,1,not classified by operand
-ud2,1,not classified by operand
-vphaddw,1,not classified by operand
-cwtd,1,not classified by operand
-shrdw,1,not classified by operand
-cmovnpl,1,not classified by operand
-vstmxcsr,1,not classified by operand
-vldmxcsr,1,not classified by operand
-vfmsubadd231ps,1,not classified by operand
-vcvttpd2dqx,1,not classified by operand
-vpmulhuw,1,not classified by operand
-btcl,1,not classified by operand
-vfnmsub213sd,1,not classified by operand
-scasl,1,not classified by operand
-insb,1,not classified by operand
-pushfq,1,not classified by operand
-scasb,1,not classified by operand
-movss,1,not classified by operand
-subss,1,not classified by operand
-cvttss2si,1,not classified by operand
-enter,1,not classified by operand
-loop,1,not classified by operand
-lretl,1,not classified by operand
-xlatb,1,not classified by operand
-outb,1,not classified by operand
-cli,1,not classified by operand
-fdivs,1,not classified by operand
-addr32,1,not classified by operand
-hlt,1,not classified by operand
+static_mnemonic,linear_records,distinct_tested_encodings,sample_tested_bytes
+movq,4076691,0,
+int3,3192131,1,cc
+movl,2256910,5,b800000000 b800000080 b801000000 b807000000
+callq,1551198,3,e805000000 ff15fa000000 ffd0
+leaq,1169398,0,
+je,1052765,0,
+popq,952930,0,
+pushq,833718,0,
+vmovaps,702493,1,c5f829742420
+jne,688157,1,7505
+jmp,652705,1,ebed
+addq,643830,2,4801c8 4883c428
+testq,603963,0,
+xorl,473806,1,31c0
+movb,466886,2,c605e901000002 c605f901000001
+cmpl,424762,1,39d1
+retq,389567,4,c20000 c22000 c2ffff c3
+subq,350279,1,4883ec28
+testb,302772,0,
+cmpq,284707,0,
+vmovss,264157,3,c5ea10c9 c5fa1008 c5fa1108
+vmovups,235213,0,
+cmpb,198411,0,
+andl,188174,0,
+vbroadcastss,181825,2,c4e2791805f7070000 c4e27d1805f7070000
+movzwl,178406,0,
+vmulps,173969,2,c5f059c2 c5f459c2
+vxorps,148458,1,c5cc57c6
+testl,145614,1,f7c2feffffff
+movw,105125,1,66c780100000003412
+shlq,104160,0,
+shrl,87527,0,
+vshufps,85820,1024,c5f8c60800 c5f8c60801 c5f8c60802 c5f8c60803
+vhaddps,82468,2,c5f37cc2 c5f77cc2
+vucomiss,80521,2,c5f82e30 c5f82ef2
+orb,80100,0,
+leal,79403,0,
+shll,78898,1,c1e104
+vblendps,77033,0,
+sete,73067,0,
+imulq,71350,3,480faf10 480fafd0 486bc1fe
+movzbl,69196,0,
+andb,65361,0,
+orl,64461,0,
+incl,60118,0,
+vmulss,59543,1,c5fa59c1
+movabsq,58045,4,48b82a00000000000000 48b90800000000000000 49ba0102030405060708 49bafe02030405060708
+cmpw,56183,0,
+decl,55114,1,ffc8
+imull,52516,2,0fafd0 69c10d661900
+lock,52249,0,
+vzeroupper,52204,0,
+andq,52170,0,
+jb,50438,0,
+incq,48689,0,
+shrq,48566,0,
+addl,48235,0,
+ja,47360,0,
+vfmadd213ps,46927,4,c4e271a800 c4e271a8c2 c4e275a800 c4e275a8c2
+jae,46425,0,
+vfmadd231ps,45599,4,c4e271b800 c4e271b8c2 c4e275b800 c4e275b8c2
+vblendvps,43316,4,c4e3694a0010 c4e3694ac010 c4e36d4a0010 c4e36d4ac010
+jbe,42708,0,
+vmovdqa,42125,0,
+orq,41701,0,
+nop,40241,1,90
+setne,40085,0,
+vaddps,37967,2,c5f058c2 c5f458c2
+vandps,37549,0,
+vsubps,37293,2,c5f05cc2 c5f45cc2
+movslq,35193,0,
+vpxor,32967,0,
+jo,31214,0,
+vmovsd,31180,3,c5eb10c9 c5fb1008 c5fb1108
+vaddss,27217,1,c5fa58c1
+vmovdqu,25446,1,c5fe6f441108
+vfmadd132ps,25327,4,c4e2719800 c4e27198c2 c4e2759800 c4e27598c2
+vsubss,24856,1,c5fa5cc1
+vpackssdw,23480,4,c4e1796b08 c4e1796bca c4e17d6b08 c4e17d6bca
+jle,23203,0,
+bextrl,22467,1,c4e270f7c7
+vmovd,22236,2,c5f96ec1 c5f97ec1
+vfmsub213ps,20545,4,c4e271aa00 c4e271aac2 c4e275aa00 c4e275aac2
+vcmpltps,19812,1,c5f8c2ca01
+subl,19615,0,
+js,18950,0,
+vmovq,18273,3,c4e1f96ec1 c4e1f97ec1 c5fa7ec0
+jg,18132,0,
+andnl,17772,1,c4e270f2c7
+vpmovmskb,17583,0,
+btl,17571,1,0fa3c1
+vrsqrtps,17216,2,c5f852c2 c5fc52c2
+vinsertps,17159,512,c4e379210800 c4e379210801 c4e379210802 c4e379210803
+vpcmpeqd,16064,1,c5f976c1
+cmpxchgq,16038,0,
+vfmadd213ss,15450,2,c4e271a900 c4e271a9c2
+vmaxss,14866,0,
+jl,14553,0,
+vshufpd,13953,0,
+jge,13556,0,
+vminss,13423,0,
+cmoveq,13370,0,
+vcvtsi2ss,13338,0,
+testw,13314,0,
+jno,12345,0,
+vcmpless,12273,1,c5fac2ca02
+jmpq,12146,0,
+xorb,11916,0,
+tzcntl,11818,0,
+vfnmadd213ps,11796,4,c4e271ac00 c4e271acc2 c4e275ac00 c4e275acc2
+vcmpltss,11720,1,c5fac2ca01
+vcvtdq2ps,11682,0,
+divq,11086,1,48f7f1
+vunpcklps,11041,0,
+setae,10973,0,
+vpextrb,10942,1,c4e37914c10f
+vcmpleps,10858,1,c5f8c2ca02
+cmovbl,10650,0,
+decq,10457,0,
+cmovneq,10355,0,
+vfnmadd231ps,10313,4,c4e271bc00 c4e271bcc2 c4e275bc00 c4e275bcc2
+vpand,10272,0,
+movswl,10161,0,
+vpsignb,10143,4,c4e2710800 c4e27108c0 c4e2750800 c4e27508c0
+vdivss,10133,1,c5fa5ec1
+xorq,9987,0,
+cmpxchgl,9665,0,
+notb,9661,1,f6d0
+setb,9312,0,
+vrcpps,8907,2,c5f853c2 c5fc53c2
+vpbroadcastb,8903,4,c4e2797800 c4e27978c0 c4e27d7800 c4e27d78c0
+vpbroadcastd,8748,4,c4e2795800 c4e27958c0 c4e27d5800 c4e27d58c0
+vextracti128,8692,0,
+vmovmskps,8433,0,
+shrb,8263,0,
+cmovnel,7967,0,
+vmovlps,7921,1,c5f81205f8000000
+vpor,7727,0,
+vcvttps2dq,7612,0,
+vpsrad,7531,24,c5e972e000 c5e972e001 c5e972e007 c5e972e00f
+cmovel,7510,0,
+vpcmpgtq,7501,4,c4e2713700 c4e27137c0 c4e2753700 c4e27537c0
+vpcmpeqb,7446,1,c5f974c1
+blsrl,7379,1,c4e278f3cf
+vpbroadcastq,7238,4,c4e2795900 c4e27959c0 c4e27d5900 c4e27d59c0
+cmovael,7104,0,
+vpunpckhwd,7098,4,c5d96900 c5d969c1 c5dd6900 c5dd69c1
+vunpckhps,7001,0,
+vcvttss2si,6601,4,c4e17a2c08 c4e17a2cc8 c4e1fa2c08 c4e1fa2cc8
+vmaxps,6589,0,
+vcmpeqps,6521,1,c5f8c2ca00
+vfmadd132ss,6443,2,c4e2719900 c4e27199c2
+vtestps,6395,0,
+seta,6303,0,
+vorps,6226,0,
+vmovshdup,5795,0,
+vandnps,5689,0,
+vminps,5490,0,
+vpsubd,5338,1,c5f9fac1
+addb,5229,0,
+setbe,5094,0,
+vcmpnltps,4993,1,c5f8c2ca05
+vpunpcklqdq,4652,4,c5d96c00 c5d96cc1 c5dd6c00 c5dd6cc1
+vroundps,4633,20,c4e379080800 c4e379080801 c4e379080802 c4e379080803
+vrsqrtss,4577,0,
+jnp,4499,0,
+vfnmadd132ps,4496,4,c4e2719c00 c4e2719cc2 c4e2759c00 c4e2759cc2
+adcq,4465,0,
+shlxq,4458,0,
+vpcmpeqq,4355,4,c4e2712900 c4e27129c0 c4e2752900 c4e27529c0
+notl,4326,0,
+movdqu,4308,1,f30f7f05f1000000
+divl,4264,0,
+sarq,4066,0,
+sarl,3837,1,d1f9
+vfmadd231ss,3796,2,c4e271b900 c4e271b9c2
+notq,3776,0,
+vpmovsxbq,3730,0,
+jns,3724,0,
+cmovbq,3607,0,
+setl,3601,0,
+vpacksswb,3527,4,c4e1796308 c4e17963ca c4e17d6308 c4e17d63ca
+shlb,3495,0,
+shlxl,3456,1,c4e271f7c0
+jp,3433,0,
+incb,3413,0,
+xchgl,3258,0,
+vptest,3195,0,
+vpshufd,3168,0,
+cmovgel,3163,0,
+negq,3141,1,48f7d8
+sbbq,3129,0,
+decb,3099,0,
+mulxq,2886,2,c4e2f3f6c0 c4e2fbf6c0
+cmovaeq,2855,0,
+vfmsub231ps,2835,4,c4e271ba00 c4e271bac2 c4e275ba00 c4e275bac2
+por,2665,0,
+pand,2604,0,
+pause,2601,0,
+vpshufb,2572,1,c4e27900c1
+vmovapd,2550,0,
+btq,2522,0,
+vinserti128,2461,0,
+cltq,2334,1,4898
+nopw,2270,212,660f1f00 660f1f01 660f1f02 660f1f03
+movswq,2167,0,
+xaddl,2160,0,
+vpslld,2143,24,c5e972f000 c5e972f001 c5e972f007 c5e972f00f
+vcmpneqps,2045,1,c5f8c2ca04
+cmoval,2022,0,
+vpextrd,1993,0,
+vfnmsub231ps,1991,4,c4e271be00 c4e271bec2 c4e275be00 c4e275bec2
+vpaddw,1966,1,c5f9fdc1
+vcmpnleps,1963,1,c5f8c2ca06
+vfnmsub213ps,1949,4,c4e271ae00 c4e271aec2 c4e275ae00 c4e275aec2
+vfmsub132ps,1896,4,c4e2719a00 c4e2719ac2 c4e2759a00 c4e2759ac2
+negl,1848,2,f71dfa000000 f7d8
+vmovlhps,1846,1,c5f816c1
+vpaddd,1844,1,c5f9fec1
+vpblendd,1831,0,
+vextractps,1818,0,
+vpextrw,1808,0,
+movsbl,1798,0,
+vpermq,1794,256,c4e3fd00c000 c4e3fd00c001 c4e3fd00c002 c4e3fd00c003
+vaesenc,1794,0,
+adcl,1751,0,
+vpmovzxwd,1719,0,
+vcvtph2ps,1673,0,
+vcvtps2ph,1630,0,
+nopl,1596,53,0f1f00 0f1f01 0f1f02 0f1f03
+cmovll,1584,0,
+vcmplt_oqps,1574,1,c5f8c2ca11
+pxor,1554,1,660fefc0
+cmovaq,1521,0,
+vpshufhw,1438,0,
+adcxq,1409,0,
+vroundss,1400,10,c4e3790a0800 c4e3790a0801 c4e3790a0802 c4e3790a0803
+orw,1400,0,
+vpinsrd,1380,0,
+vmovddup,1371,0,
+movdqa,1371,1,660f6f05f8000000
+vpaddq,1331,3,c5f9d405f8000000 c5f9d4c1 c5fdd4c1
+movups,1325,0,
+sbbl,1314,1,1bc0
+cmovsq,1269,0,
+adoxq,1269,0,
+decw,1253,0,
+vxorpd,1242,0,
+setg,1229,0,
+vcmpeqss,1216,1,c5fac2ca00
+cmovlel,1151,0,
+shrxl,1150,0,
+mulq,1146,1,48f7e1
+vpinsrb,1140,0,
+idivl,1120,0,
+incw,1086,0,
+vpinsrw,1081,0,
+btsq,1076,0,
+movsbq,1053,0,
+vucomisd,1047,2,c5f92e30 c5f92ef2
+roll,999,28,c10000 c10001 c10007 c10008
+vsqrtss,984,0,
+vcvtss2sd,976,0,
+aesenc,975,0,
+vfnmadd213ss,973,2,c4e271ad00 c4e271adc2
+setge,961,0,
+cmovgq,950,0,
+vmovupd,948,0,
+vpmaskmovd,944,0,
+cltd,935,1,99
+vfnmsub132ps,923,4,c4e2719e00 c4e2719ec2 c4e2759e00 c4e2759ec2
+rorxl,919,257,c4637bf0c200 c4637bf0c201 c4637bf0c202 c4637bf0c203
+vpsrld,880,24,c5e972d000 c5e972d001 c5e972d007 c5e972d00f
+vpunpckldq,875,4,c5d96200 c5d962c1 c5dd6200 c5dd62c1
+vcvtsi2ssl,871,0,
+vpsubw,865,1,c5f9f9c1
+vpclmulqdq,807,0,
+cmovnsq,799,0,
+cmovnsl,785,0,
+vpshuflw,784,0,
+bzhiq,755,0,
+cmovbel,746,0,
+vcvtsd2ss,737,0,
+andnq,727,0,
+paddd,705,0,
+setns,702,0,
+vmulsd,694,1,c5fb59c1
+xchgb,691,1,86e0
+vcmpnless,683,1,c5fac2ca06
+cmovlq,682,0,
+subb,675,0,
+vpermilps,667,0,
+cmovgeq,658,0,
+sets,650,0,
+pcmpeqd,647,0,
+vdivps,632,2,c5f05ec2 c5f45ec2
+cmovgl,630,0,
+xchgq,629,1,4990
+pextq,626,0,
+setle,623,0,
+cmovsl,600,0,
+vpmovzxbd,596,0,
+vinsertf128,593,0,
+vcmpneqss,587,1,c5fac2ca04
+cmpxchgb,566,0,
+vextractf128,531,0,
+vpbroadcastw,523,4,c4e2797900 c4e27979c0 c4e27d7900 c4e27d79c0
+vpextrq,495,1,c4e3f916c101
+andw,490,0,
+vcvtpd2ps,480,0,
+vpermpd,480,0,
+addw,476,1,6683c301
+vaddsd,473,1,c5fb58c1
+vpmovsxwd,471,0,
+vpmovsxbd,471,0,
+vcvtsi2sd,454,0,
+vfmsub231ss,452,2,c4e271bb00 c4e271bbc2
+vpunpckhdq,445,4,c5d96a00 c5d96ac1 c5dd6a00 c5dd6ac1
+vfmsub213ss,435,2,c4e271ab00 c4e271abc2
+bextrq,431,0,
+cmovbeq,426,0,
+vunpckhpd,426,0,
+vfnmadd231ss,421,2,c4e271bd00 c4e271bdc2
+popcntl,417,0,
+vmovmskpd,408,0,
+rolq,404,28,48c10000 48c10001 48c10007 48c10008
+cmovpl,379,0,
+btrl,372,1,0fb3c1
+vtestpd,365,0,
+shrxq,364,0,
+vsubsd,364,1,c5fb5cc1
+vbroadcastsd,362,1,c4e27d1905f7070000
+btrq,341,0,
+vmaskmovps,340,0,
+aesdec,338,0,
+pclmulqdq,321,0,
+vcvttsd2si,313,4,c4e17b2c08 c4e17b2cc8 c4e1fb2c08 c4e1fb2cc8
+vpsrlq,307,24,c5e973d000 c5e973d001 c5e973d007 c5e973d00f
+vcvtps2pd,304,0,
+vfnmsub213ss,304,2,c4e271af00 c4e271afc2
+vcvtdq2pd,303,0,
+vpsrldq,300,64,c5e973d800 c5e973d801 c5e973d802 c5e973d803
+vpcmpgtd,298,4,c4e1716600 c4e17166c0 c4e1756600 c4e17566c0
+vpmaskmovq,294,0,
+vpmovsxdq,292,0,
+vpunpcklwd,290,4,c5d96100 c5d961c1 c5dd6100 c5dd61c1
+vfnmadd132ss,290,2,c4e2719d00 c4e2719dc2
+sbbb,286,0,
+xorps,284,0,
+vphaddd,277,4,c4e2710200 c4e27102c2 c4e2750200 c4e27502c2
+vfmadd213sd,274,2,c4e2f1a900 c4e2f1a9c2
+vcmpnltss,270,1,c5fac2ca05
+negb,268,1,f6d8
+vpslldq,259,64,c5e973f800 c5e973f801 c5e973f802 c5e973f803
+lzcntl,255,0,
+vpmovzxdq,255,0,
+vpandn,251,0,
+vunpcklpd,249,0,
+vpsrlw,249,24,c5e971d000 c5e971d001 c5e971d007 c5e971d00f
+movbeq,248,2,480f38f008 480f38f108
+pshufd,248,0,
+vandpd,242,0,
+setnp,240,0,
+rorxq,236,256,c463fbf0c200 c463fbf0c201 c463fbf0c202 c463fbf0c203
+vpermps,233,1,c4e25d16c1
+setp,232,0,
+shldq,222,0,
+vfmadd213pd,218,4,c4e2f1a800 c4e2f1a8c2 c4e2f5a800 c4e2f5a8c2
+vpblendw,209,0,
+bswapq,206,16,480fc8 480fc9 480fca 480fcb
+psrld,201,0,
+pslld,201,0,
+vsubpd,196,2,c5f15cc2 c5f55cc2
+vmovlpd,193,0,
+vpsllvd,192,4,c4e2714700 c4e27147c0 c4e2754700 c4e27547c0
+vhsubps,188,2,c5f37dc2 c5f77dc2
+vmulpd,184,2,c5f159c2 c5f559c2
+pslldq,184,0,
+vcvtps2dq,182,0,
+sarb,176,0,
+vpmaxsd,176,4,c4e2713d00 c4e2713dc2 c4e2753d00 c4e2753dc2
+subw,175,0,
+vpsllq,173,24,c5e973f000 c5e973f001 c5e973f007 c5e973f00f
+vmaxsd,171,0,
+psrldq,169,0,
+vblendpd,166,0,
+pshufb,163,0,
+vpsadbw,162,0,
+vpermd,156,1,c4e25d36c1
+vpmulld,156,1,c4e27940c1
+vdivsd,152,1,c5fb5ec1
+btsl,147,0,
+vpminud,145,4,c4e2713b00 c4e2713bc2 c4e2753b00 c4e2753bc2
+vbroadcastf128,143,1,c4e27d1a05f7070000
+movsd,142,0,
+rolb,139,28,c00000 c00001 c00007 c00008
+vfmadd231sd,138,2,c4e2f1b900 c4e2f1b9c2
+vaesenclast,138,0,
+vpsrlvd,133,4,c4e2714500 c4e27145c0 c4e2754500 c4e27545c0
+vpminsd,127,4,c4e2713900 c4e27139c2 c4e2753900 c4e27539c2
+vpsubq,124,1,c5f9fbc1
+vblendvpd,122,4,c4e3694b0010 c4e3694bc010 c4e36d4b0010 c4e36d4bc010
+vpmaxuw,121,4,c4e2713e00 c4e2713ec2 c4e2753e00 c4e2753ec2
+vpaddb,107,1,c5f9fcc1
+vrcpss,106,0,
+tzcntq,103,1,f3480fbcc7
+adcb,103,0,
+vfnmsub231ss,100,2,c4e271bf00 c4e271bfc2
+vfmadd231pd,97,4,c4e2f1b800 c4e2f1b8c2 c4e2f5b800 c4e2f5b8c2
+xchgw,95,0,
+cwtl,95,1,98
+vorpd,95,0,
+vroundsd,94,10,c4e3790b0800 c4e3790b0801 c4e3790b0802 c4e3790b0803
+idivq,94,1,48f7f9
+movbel,94,2,0f38f008 0f38f108
+xorw,93,0,
+blsil,93,1,c4e278f3df
+cqto,93,1,4899
+vfmsub132ss,93,2,c4e2719b00 c4e2719bc2
+vcvtsi2sdl,92,0,
+vmovhps,88,2,c5f81605f8000000 c5f81705f8000000
+movbew,80,2,660f38f008 660f38f108
+vbroadcasti128,80,0,
+vpermilpd,80,0,
+shrdq,80,0,
+divw,79,0,
+bzhil,78,0,
+vpmovzxbw,78,0,
+prefetcht1,76,0,
+aesenclast,75,0,
+prefetchnta,73,0,
+vpsllvq,71,4,c4e2f14700 c4e2f147c0 c4e2f54700 c4e2f547c0
+vpackuswb,70,4,c4e1796708 c4e17967ca c4e17d6708 c4e17d67ca
+cmovleq,69,0,
+vpackusdw,67,4,c4e2792b08 c4e2792bca c4e27d2b08 c4e27d2bca
+lzcntq,66,1,f3480fbdc7
+blsiq,56,0,
+cmpxchg16b,56,0,
+vpmaxud,56,4,c4e2713f00 c4e2713fc2 c4e2753f00 c4e2753fc2
+vfmadd132sd,56,2,c4e2f19900 c4e2f199c2
+vcmpltsd,56,1,c5fbc2ca01
+vpcmpeqw,55,1,c5f975c1
+vaddpd,54,2,c5f158c2 c5f558c2
+vhaddpd,54,2,c5f17cc2 c5f57cc2
+vpinsrq,54,1,c4e3f922c101
+movaps,54,0,
+vminsd,53,0,
+vpmaddwd,52,0,
+vpmovsxwq,49,0,
+xaddb,48,0,
+shrw,48,0,
+vpblendvb,45,4,c4e3694c0010 c4e3694cc010 c4e36d4c0010 c4e36d4cc010
+vpmovsxbw,45,0,
+vcvtpd2psy,44,0,
+vperm2f128,43,0,
+mull,43,0,
+vmovntps,42,0,
+popcntq,41,1,f3480fb8c7
+vpsrlvq,41,4,c4e2f14500 c4e2f145c0 c4e2f54500 c4e2f545c0
+vfmsub231sd,41,2,c4e2f1bb00 c4e2f1bbc2
+bswapl,38,16,0fc8 0fc9 0fca 0fcb
+vpsllw,38,24,c5e971f000 c5e971f001 c5e971f007 c5e971f00f
+vmovhpd,38,0,
+vpmuludq,37,0,
+mfence,36,1,0faef0
+divb,36,0,
+vsqrtps,34,2,c5f851c2 c5fc51c2
+vfnmadd231sd,34,2,c4e2f1bd00 c4e2f1bdc2
+vsqrtsd,32,0,
+movd,31,0,
+aeskeygenassist,31,0,
+vmovsldup,30,0,
+sarxl,28,0,
+aesdeclast,26,0,
+psllq,25,0,
+psrlq,25,0,
+vdivpd,24,2,c5f15ec2 c5f55ec2
+vpmullw,23,1,c5f9d5c1
+xaddq,21,0,
+vcmpltpd,21,1,c5f9c2ca01
+vperm2i128,21,1,c4e37d46c183
+sfence,20,1,0faef8
+vcvttpd2dq,19,0,
+insertq,19,0,
+rorl,19,28,c10800 c10801 c10807 c10808
+vcvtpd2psx,18,0,
+rorb,18,28,c00800 c00801 c00807 c00808
+rolw,18,28,66c10000 66c10001 66c10007 66c10008
+negw,17,0,
+vpmuldq,17,0,
+vpminub,17,4,c4e171da00 c4e171dac2 c4e175da00 c4e175dac2
+vpmovzxbq,16,0,
+cmovsw,16,0,
+vpmaxub,16,4,c4e171de00 c4e171dec2 c4e175de00 c4e175dec2
+shldl,15,0,
+vpunpcklbw,15,4,c5d96000 c5d960c1 c5dd6000 c5dd60c1
+cmovnoq,15,0,
+vcmplesd,15,1,c5fbc2ca02
+cmovpq,14,0,
+vcvtsi2sdq,14,1,c4e1fb2ac0
+pinsrq,14,0,
+sbbw,13,0,
+vcmpeqsd,13,1,c5fbc2ca00
+vaesimc,13,0,
+vpunpckhbw,13,4,c5d96800 c5d968c1 c5dd6800 c5dd68c1
+prefetcht0,12,0,
+vfmsub231pd,12,4,c4e2f1ba00 c4e2f1bac2 c4e2f5ba00 c4e2f5bac2
+vcmpneq_oqps,11,1,c5f8c2ca0c
+vmaxpd,11,0,
+btcq,11,0,
+vpalignr,11,0,
+vmovntdq,11,0,
+seto,10,0,
+adcw,10,0,
+vpsubusw,10,0,
+clzero,10,0,
+vcmpordps,9,1,c5f8c2ca07
+vcmpneq_oqss,9,1,c5fac2ca0c
+vcmplepd,9,1,c5f9c2ca02
+shlw,9,0,
+cpuid,9,0,
+vfmadd132pd,9,4,c4e2f19800 c4e2f198c2 c4e2f59800 c4e2f598c2
+bsrq,9,1,480fbdc7
+psrad,9,0,
+lfence,8,1,0faee8
+setno,8,0,
+clwb,8,0,
+cvtsi2sd,8,0,
+shufpd,8,0,
+vfnmadd213sd,7,2,c4e2f1ad00 c4e2f1adc2
+vfnmsub132ss,7,2,c4e2719f00 c4e2719fc2
+vcvtsi2ssq,7,1,c4e1fa2ac0
+vpunpckhqdq,7,4,c5d96d00 c5d96dc1 c5dd6d00 c5dd6dc1
+vsqrtpd,7,2,c5f951c2 c5fd51c2
+comisd,7,0,
+vaddsubps,6,2,c5f3d0c2 c5f7d0c2
+vpabsd,6,4,c4e2791e00 c4e2791ec0 c4e27d1e00 c4e27d1ec0
+vandnpd,6,0,
+vpcmpgtw,6,4,c4e1716500 c4e17165c0 c4e1756500 c4e17565c0
+vcmpeqpd,6,1,c5f9c2ca00
+vfnmsub231sd,6,2,c4e2f1bf00 c4e2f1bfc2
+cvtsi2ss,6,0,
+rep,6,0,
+addsd,6,0,
+btw,6,0,
+pinsrd,6,0,
+notw,5,0,
+vpminuw,5,4,c4e2713a00 c4e2713ac2 c4e2753a00 c4e2753ac2
+vpmovzxwq,5,0,
+vcmpneqsd,5,1,c5fbc2ca04
+vfnmadd231pd,5,4,c4e2f1bc00 c4e2f1bcc2 c4e2f5bc00 c4e2f5bcc2
+vcmpunordps,5,1,c5f8c2ca03
+prefetchw,5,0,
+mulsd,5,0,
+mulb,4,0,
+vphsubd,4,4,c4e2710600 c4e27106c2 c4e2750600 c4e27506c2
+vfmsub132sd,4,2,c4e2f19b00 c4e2f19bc2
+vcmpeq_uqps,4,1,c5f8c2ca08
+cmovnew,4,0,
+vfmsub213pd,4,4,c4e2f1aa00 c4e2f1aac2 c4e2f5aa00 c4e2f5aac2
+blsrq,4,0,
+vphminposuw,4,0,
+cvtdq2pd,4,0,
+cmovnsw,3,0,
+idivw,3,0,
+vfnmsub231pd,3,4,c4e2f1be00 c4e2f1bec2 c4e2f5be00 c4e2f5bec2
+vcmpnlesd,3,1,c5fbc2ca06
+vroundpd,3,20,c4e379090800 c4e379090801 c4e379090802 c4e379090803
+imulw,3,2,660fafd0 6669c10300
+cmovol,3,0,
+vcmpneqpd,3,1,c5f9c2ca04
+vhsubpd,3,2,c5f17dc2 c5f57dc2
+vpsubb,3,1,c5f9f8c1
+sarxq,3,0,
+vpminsw,3,4,c4e171ea00 c4e171eac2 c4e175ea00 c4e175eac2
+vpmaxsw,3,4,c4e171ee00 c4e171eec2 c4e175ee00 c4e175eec2
+int,3,0,
+addss,3,0,
+comiss,3,0,
+vmaskmovpd,3,0,
+vminpd,2,0,
+cmovnpq,2,0,
+movzbw,2,0,
+vpsravd,2,4,c4e2714600 c4e27146c0 c4e2754600 c4e27546c0
+vpcmpgtb,2,4,c4e1716400 c4e17164c0 c4e1756400 c4e17564c0
+vfnmsub213pd,2,4,c4e2f1ae00 c4e2f1aec2 c4e2f5ae00 c4e2f5aec2
+vfnmadd132sd,2,2,c4e2f19d00 c4e2f19dc2
+cmovew,2,0,
+xgetbv,2,0,
+cmovnol,2,0,
+vpabsw,2,4,c4e2791d00 c4e2791dc0 c4e27d1d00 c4e27d1dc0
+cmovoq,2,0,
+shldw,2,0,
+vfmaddsub231ps,2,4,c4e271b600 c4e271b6c2 c4e275b600 c4e275b6c2
+vfnmadd213pd,2,4,c4e2f1ac00 c4e2f1acc2 c4e2f5ac00 c4e2f5acc2
+rorq,2,28,48c10800 48c10801 48c10807 48c10808
+idivb,2,0,
+monitorx,2,0,
+mwaitx,2,0,
+movabsb,2,0,
+movabsl,2,0,
+inb,2,0,
+divss,2,0,
+cvttsd2si,2,0,
+subsd,2,0,
+divsd,2,0,
+pcmpeqb,2,0,
+pmovmskb,2,0,
+vcmpnltpd,1,1,c5f9c2ca05
+vcmpordss,1,1,c5fac2ca07
+vcmpeq_uqss,1,1,c5fac2ca08
+vpsraw,1,24,c5e971e000 c5e971e001 c5e971e007 c5e971e00f
+vcmpunordss,1,1,c5fac2ca03
+ud2,1,0,
+vphaddw,1,4,c4e2710100 c4e27101c2 c4e2750100 c4e27501c2
+cwtd,1,1,6699
+shrdw,1,0,
+cmovnpl,1,0,
+vstmxcsr,1,0,
+vldmxcsr,1,0,
+vfmsubadd231ps,1,4,c4e271b700 c4e271b7c2 c4e275b700 c4e275b7c2
+vcvttpd2dqx,1,0,
+vpmulhuw,1,0,
+btcl,1,0,
+vfnmsub213sd,1,2,c4e2f1af00 c4e2f1afc2
+scasl,1,0,
+insb,1,0,
+pushfq,1,0,
+scasb,1,0,
+movss,1,0,
+subss,1,0,
+cvttss2si,1,0,
+enter,1,0,
+loop,1,0,
+lretl,1,0,
+xlatb,1,0,
+outb,1,0,
+cli,1,0,
+fdivs,1,0,
+addr32,1,0,
+hlt,1,0,
