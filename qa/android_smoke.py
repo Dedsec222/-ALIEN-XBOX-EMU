@@ -122,12 +122,12 @@ def select_fixture(filename):
         adb("shell","uiautomator","dump","/sdcard/window.xml")
         return ET.fromstring(adb("shell","cat","/sdcard/window.xml"))
     def select_file():
-        tree=snapshot()
+        tree=wait(snapshot,20)
         switch=next((node for node in tree.iter("node") if node.get("content-desc")=="List view"),None)
         if switch is not None:
             node_click("List view")
         node_click(filename)
-    if any(n.get("text")=="Files in Alien-QA" for n in snapshot().iter("node")):
+    if any(n.get("text")=="Files in Alien-QA" for n in wait(snapshot,20).iter("node")):
         select_file()
         return
     node_click("Show roots")
