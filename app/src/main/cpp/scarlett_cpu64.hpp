@@ -1016,6 +1016,77 @@ inline Cpu64State executeGuest64(GuestMemory64& memory, uint64_t entry,
             }
             pc=saved;
         }
+
+        // V80: legacy SSE2 MOVD/MOVQ transfers.
+        if(op==0x0f && !locked &&
+           (simdPrefix==0x66 || simdPrefix==0xf3)) {
+            auto saved=pc;
+            uint8_t ext=0,m=0;
+            if(!fetch(pc,ext)){
+                s.exit=Cpu64Exit::memoryFault;break;
+            }
+            bool scalar=simdPrefix==0x66 &&
+                (ext==0x6e || ext==0x7e);
+            bool quadLoad=simdPrefix==0xf3 && ext==0x7e;
+            bool quadStore=simdPrefix==0x66 && ext==0xd6;
+
+            if(scalar || quadLoad || quadStore){
+                Operand rm{};
+                if(!fetch(pc,m)||!decodeRM(m,rm)){
+                    s.exit=Cpu64Exit::memoryFault;break;
+                }
+                unsigned reg=((m>>3)&7)+((rex&4)?8:0);
+                unsigned w=(quadLoad||quadStore||(rex&8))?8:4;
+                std::array<uint8_t,8> bytes{};
+                auto addr=addressOf(rm);
+
+                if(quadStore || (scalar && ext==0x7e)){
+                    for(unsigned j=0;j<w;++j)
+                        bytes[j]=s.xmm[reg][j];
+
+                    if(rm.reg){
+                        if(quadStore){
+                            s.xmm[rm.id].fill(0);
+                            for(unsigned j=0;j<w;++j)
+                                s.xmm[rm.id][j]=bytes[j];
+                        }else{
+                            uint64_t v=0;
+                            for(unsigned j=0;j<w;++j)
+                                v|=uint64_t(bytes[j])<<(8*j);
+                            writeReg(rm.id,w,v);
+                        }
+                    }else if(memory.write(addr,
+                        std::span<const uint8_t>(bytes).first(w))
+                        !=GuestMemory64::Fault::none){
+                        s.exit=Cpu64Exit::memoryFault;break;
+                    }
+                }else{
+                    if(rm.reg){
+                        if(quadLoad){
+                            for(unsigned j=0;j<w;++j)
+                                bytes[j]=s.xmm[rm.id][j];
+                        }else{
+                            auto v=readReg(rm.id,w);
+                            for(unsigned j=0;j<w;++j)
+                                bytes[j]=uint8_t(v>>(8*j));
+                        }
+                    }else if(memory.read(addr,
+                        std::span<uint8_t>(bytes).first(w))
+                        !=GuestMemory64::Fault::none){
+                        s.exit=Cpu64Exit::memoryFault;break;
+                    }
+
+                    s.xmm[reg].fill(0);
+                    for(unsigned j=0;j<w;++j)
+                        s.xmm[reg][j]=bytes[j];
+                }
+
+                // Legacy SSE preserves upper YMM lanes.
+                s.rip=pc;++s.steps;continue;
+            }
+            pc=saved;
+        }
+
         // V11: legacy SSE2 128-bit moves and bitwise operations.
         if(simdPrefix && (simdPrefix!=0x66 || op==0x0f) && !locked) {
             uint8_t ext=0,m=0;
