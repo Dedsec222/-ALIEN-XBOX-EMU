@@ -1,0 +1,5 @@
+#include "scarlett_cpu64.hpp"
+#include <cassert>
+#include <iostream>
+using namespace genesis;
+int main(){GuestMemory64 m;using F=GuestMemory64::Fault;assert(m.map(0x1000,4096,7)==F::none);Cpu64State init;init.gpr[1]=0x982c0a5d;auto run=[&](auto code){assert(m.write(0x1000,code)==F::none);return executeGuest64(m,0x1000,1,0x1900,nullptr,0,0,0,0,&init);};auto s=run(std::array<uint8_t,6>{0x69,0xc1,0x0d,0x66,0x19,0});assert(s.rip==0x1006&&s.gpr[0]==uint32_t(0x982c0a5du*1664525u)&&s.cf&&s.of);init.gpr[1]=7;s=run(std::array<uint8_t,4>{0x48,0x6b,0xc1,0xfe});assert(s.gpr[0]==uint64_t(-14)&&!s.cf&&!s.of);init.gpr[0]=0x123456789abc0000ull;s=run(std::array<uint8_t,5>{0x66,0x69,0xc1,3,0});assert(s.gpr[0]==0x123456789abc0015ull);ScarlettImports64 i;assert(i.install(m));auto r=i.registerImport("api-ms-win-crt-utility-l1-1-0.dll","rand"),seed=i.registerImport("api-ms-win-crt-utility-l1-1-0.dll","srand");uint64_t out=0;assert(r&&seed&&i.dispatch(seed,m,1,out)&&i.dispatch(r,m,0,out)&&out==41&&i.dispatch(r,m,0,out)&&out==18467);std::cout<<"V29 tests passed\n";}

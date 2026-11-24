@@ -1,0 +1,5 @@
+#include "scarlett_imports64.hpp"
+#include <cassert>
+#include <iostream>
+using namespace genesis;
+int main(){GuestMemory64 m; ScarlettImports64 im;assert(im.install(m));uint64_t r=0;auto call=[&](const char* n,uint64_t a=0,uint64_t b=0,uint64_t c=0,uint64_t d=0){auto f=im.registerImport(std::string(n)=="CloseHandle"?"api-ms-win-core-handle-l1-1-0.dll":"api-ms-win-core-synch-l1-1-0.dll",n);assert(f&&im.dispatch(f,m,a,r,b,c,d));return r;};auto h=call("CreateEventW",0,0,1);assert(h);assert(call("WaitForSingleObject",h)==0);assert(call("WaitForSingleObject",h)==258);assert(call("SetEvent",h)==1);assert(call("WaitForSingleObject",h)==0);auto k=call("CreateEventA",0,1,1);assert(call("WaitForSingleObject",k)==0);assert(call("WaitForSingleObject",k)==0);assert(call("ResetEvent",k)==1);assert(call("WaitForSingleObject",k)==258);assert(call("CloseHandle",k)==1);assert(call("WaitForSingleObject",k)==UINT32_MAX);auto f=im.registerImport("api-ms-win-core-synch-l1-1-0.dll","WaitForSingleObject");assert(!im.dispatch(f,m,h,r,0xffffffff));std::cout<<"V24 event tests passed\n";}

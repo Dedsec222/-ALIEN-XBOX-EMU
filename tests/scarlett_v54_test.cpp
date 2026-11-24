@@ -1,0 +1,5 @@
+#include "scarlett_imports64.hpp"
+#include <cassert>
+#include <iostream>
+using namespace genesis;
+int main(){GuestMemory64 m;ScarlettImports64 i;assert(i.install(m));assert(m.map(0x1000,4096,3)==GuestMemory64::Fault::none);uint64_t r=0;auto a=i.registerImport("api-ms-win-core-errorhandling-l1-1-0.dll","SetUnhandledExceptionFilter");assert(a&&i.dispatch(a,m,123,r)&&r==0);assert(i.dispatch(a,m,456,r)&&r==123);assert(i.dispatch(a,m,0,r)&&r==456);a=i.registerImport("api-ms-win-crt-convert-l1-1-0.dll","_itoa");assert(i.dispatch(a,m,uint32_t(-42),r,0x1000,10)&&r==0x1000);std::array<uint8_t,4>b{};assert(m.read(0x1000,b)==GuestMemory64::Fault::none);assert((b==std::array<uint8_t,4>{45,52,50,0}));a=i.registerImport("api-ms-win-crt-string-l1-1-0.dll","strtok");assert(m.write(0x1100,std::array<uint8_t,6>{'a',',',',','b','c',0})==GuestMemory64::Fault::none);assert(m.write(0x1200,std::array<uint8_t,2>{',',0})==GuestMemory64::Fault::none);assert(i.dispatch(a,m,0x1100,r,0x1200)&&r==0x1100);assert(i.dispatch(a,m,0,r,0x1200)&&r==0x1103);assert(i.dispatch(a,m,0,r,0x1200)&&r==0);std::cout<<"V54 runtime tests passed\n";}

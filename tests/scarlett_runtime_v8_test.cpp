@@ -1,0 +1,4 @@
+#include "scarlett_imports64.hpp"
+#include <cassert>
+#include <iostream>
+int main(){using namespace genesis; GuestMemory64 m; ScarlettImports64 i; assert(i.install(m)); uint64_t r=0; auto call=[&](const char*d,const char*n,uint64_t a,uint64_t b=0,uint64_t c=0){auto t=i.registerImport(d,n);assert(t);assert(i.dispatch(t,m,a,r,b,c));return r;}; const char*h="api-ms-win-crt-heap-l1-1-0.dll";const char*v="VCRUNTIME140.dll";call("api-ms-win-crt-runtime-l1-1-0.dll","_set_app_type",2);auto a=call(h,"calloc",4,8);assert(a);std::array<uint8_t,32>b{};assert(m.read(a,b)==GuestMemory64::Fault::none);for(auto x:b)assert(!x);assert(call(v,"memset",a,42,32)==a);auto z=call(h,"realloc",a,64);assert(z&&z!=a);assert(m.read(z,b)==GuestMemory64::Fault::none);for(auto x:b)assert(x==42);assert(m.check(a,1,1)==GuestMemory64::Fault::unmapped);assert(call(v,"memchr",z,42,32)==z);call(h,"free",z);assert(m.check(z,1,1)==GuestMemory64::Fault::unmapped);std::cout<<"V8 runtime tests passed\n";}

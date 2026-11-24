@@ -1,0 +1,5 @@
+#include "scarlett_cpu64.hpp"
+#include <cassert>
+#include <iostream>
+using namespace genesis;
+int main(){GuestMemory64 m; ScarlettImports64 im; assert(im.install(m)); assert(m.map(0x1000,4096,7)==GuestMemory64::Fault::none);assert(m.map(0x2000,4096,3)==GuestMemory64::Fault::none);auto f=im.registerImport("api-ms-win-core-rtlsupport-l1-1-0.dll","RtlCaptureContext");assert(f);std::array<uint8_t,3> code{0xff,0xd0,0xcc};assert(m.write(0x1000,code)==GuestMemory64::Fault::none);Cpu64State initial;initial.gpr[0]=f;initial.gpr[1]=0x2000;initial.gpr[3]=0x12345678;auto s=executeGuest64(m,0x1000,10,0x2ff0,&im,0,0,0,0,&initial);assert(s.exit==Cpu64Exit::breakpoint);auto get=[&](unsigned off){std::array<uint8_t,8>b{};assert(m.read(0x2000+off,b)==GuestMemory64::Fault::none);uint64_t v=0;for(unsigned i=0;i<8;++i)v|=uint64_t(b[i])<<(8*i);return v;};assert(get(48)==0x100002);assert(get(144)==0x12345678);assert(get(152)==0x2ff0);assert(get(248)==0x1002);initial.gpr[1]=0x4000;s=executeGuest64(m,0x1000,10,0x2ff0,&im,0,0,0,0,&initial);assert(s.exit==Cpu64Exit::memoryFault);std::cout<<"V19 partial context tests passed\n";}

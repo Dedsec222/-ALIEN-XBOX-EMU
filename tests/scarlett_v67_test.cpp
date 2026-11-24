@@ -1,0 +1,9 @@
+#include "scarlett_cpu64.hpp"
+#include <cassert>
+#include <iostream>
+using namespace genesis;
+int main(){GuestMemory64 m;assert(m.map(0x1000,4096,7)==GuestMemory64::Fault::none);unsigned count=0;
+for(unsigned pp:{0u,1u})for(unsigned op:{0x2eu,0x2fu})for(bool mem:{false,true})for(double a:{-1.,0.,1.,INFINITY+0.,double(NAN)})for(double b:{-1.,0.,1.,INFINITY+0.,double(NAN)}){
+Cpu64State i;i.gpr[0]=0x1800;i.of=i.sf=true; if(pp){std::memcpy(i.xmm[6].data(),&a,8);std::memcpy(i.xmm[2].data(),&b,8);}else{float x=a,y=b;std::memcpy(i.xmm[6].data(),&x,4);std::memcpy(i.xmm[2].data(),&y,4);}assert(m.write(0x1800,i.xmm[2])==GuestMemory64::Fault::none);assert(m.write(0x1000,std::array<uint8_t,4>{0xc5,uint8_t(0xf8|pp),uint8_t(op),uint8_t(mem?0x30:0xf2)})==GuestMemory64::Fault::none);auto s=executeGuest64(m,0x1000,1,0x1900,nullptr,0,0,0,0,&i);bool u=std::isnan(a)||std::isnan(b);assert(s.rip==0x1004&&s.zf==(u||a==b)&&s.cf==(u||a<b)&&s.pf==u&&!s.of&&!s.sf);assert(s.xmm==i.xmm);assert(bool(s.mxcsr&1)==(u&&op==0x2f));++count;}
+for(unsigned pp=0;pp<4;++pp)for(unsigned pred=0;pred<32;++pred)for(unsigned rel=0;rel<4;++rel){Cpu64State i;double a=rel==0?0:rel==1?1:rel==2?2:NAN,b=1;unsigned w=pp%2?8:4;for(unsigned j=0;j<16;j+=w){if(w==8){std::memcpy(i.xmm[0].data()+j,&a,w);std::memcpy(i.xmm[2].data()+j,&b,w);}else{float x=a,y=b;std::memcpy(i.xmm[0].data()+j,&x,w);std::memcpy(i.xmm[2].data()+j,&y,w);}}assert(m.write(0x1000,std::array<uint8_t,5>{0xc5,uint8_t(0xf8|pp),0xc2,0xca,uint8_t(pred)})==GuestMemory64::Fault::none);auto s=executeGuest64(m,0x1000,1,0x1900,nullptr,0,0,0,0,&i);unsigned masks[]={2,1,3,8,13,14,12,7,10,9,11,0,5,6,4,15};assert(s.rip==0x1005);for(unsigned j=0;j<(pp>=2?w:16);++j)assert(s.xmm[1][j]==((masks[pred&15]&(1u<<rel))?255:0));++count;}
+std::cout<<"V67 tests passed: "<<count<<" cases\n";}

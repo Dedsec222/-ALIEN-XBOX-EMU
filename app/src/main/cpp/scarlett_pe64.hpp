@@ -1,6 +1,8 @@
 #pragma once
 
 #include "guest_memory64.hpp"
+#include "scarlett_imports64.hpp"
+#include <iostream>
 #include <algorithm>
 #include <cstdint>
 #include <fstream>
@@ -18,6 +20,7 @@ struct ScarlettPeResult {
     uint64_t entry = 0;
     uint32_t imageSize = 0;
     uint16_t sections = 0;
+    uint32_t exceptionRva=0,exceptionSize=0;
     std::string error;
 };
 
@@ -221,12 +224,73 @@ inline ScarlettPeResult loadScarlettPe(
             return fail("Section initialization failed");
     }
 
+    if(optionalSize>=144 && u32(opt+108)>3){
+        result.exceptionRva=u32(opt+136);result.exceptionSize=u32(opt+140);
+        if(result.exceptionRva>imageSize || result.exceptionSize>imageSize-result.exceptionRva || result.exceptionSize%12) return fail("Invalid exception directory");
+    }
     result.imageBase = base;
     result.entry = base + entryRva;
     result.imageSize = imageSize;
     result.sections = count;
 
     return result;
+}
+
+inline bool resolveScarlettImports(GuestMemory64& mem,
+    const ScarlettPeResult& pe, ScarlettImports64& imports) {
+    auto read=[&](uint64_t r,unsigned n,uint64_t& val) {
+        std::array<uint8_t,8> b{};
+        if(r>pe.imageSize || n>pe.imageSize-r ||
+           mem.read(pe.imageBase+r,std::span<uint8_t>(b.data(),n))
+           !=GuestMemory64::Fault::none) return false;
+        val=0; for(unsigned i=0;i<n;++i) val|=uint64_t(b[i])<<(8*i);
+        return true;
+    };
+    auto str=[&](uint64_t r,std::string& out) {
+        for(unsigned i=0;i<4096;++i) {
+            uint64_t c;
+            if(!read(r+i,1,c)) return false;
+            if(!c) return true;
+            out+=char(c);
+        }
+        return false;
+    };
+    uint64_t h,n,dir,size;
+    if(!read(0x3c,4,h)||!read(h+20,2,n)||n<112) return false;
+    uint64_t count;
+    if(!read(h+24+108,4,count)) return false;
+    if(count<2) return true;
+    if(n<128 || !read(h+24+120,4,dir)||!read(h+24+124,4,size)) return false;
+    if(!dir && !size) return true;
+    if(!dir || size<20 || dir>pe.imageSize || size>pe.imageSize-dir) return false;
+    unsigned resolved=0, missing=0;
+    for(uint64_t d=dir;d+20<=dir+size;d+=20) {
+        uint64_t oft,dll,iat,time,chain;
+        if(!read(d,4,oft)||!read(d+4,4,time)||!read(d+8,4,chain)||
+           !read(d+12,4,dll)||!read(d+16,4,iat)) return false;
+        if(!(oft|dll|iat|time|chain)) {
+            std::cout<<"Imports resolved: "<<std::dec<<resolved<<" missing: "<<missing<<"\n";
+            return true;
+        }
+        std::string library;
+        if(!dll || !iat || !str(dll,library)) return false;
+        uint64_t table=oft?oft:iat;
+        for(uint64_t i=0;;i+=8) {
+            uint64_t thunk,old;
+            if(!read(table+i,8,thunk)||!read(iat+i,8,old)) return false;
+            if(!thunk) break;
+            std::string symbol;
+            if(thunk>>63) symbol="#"+std::to_string(thunk&65535);
+            else if(thunk>UINT32_MAX || !str(thunk+2,symbol)) return false;
+            auto addr=imports.registerImport(library,symbol);
+            if(!addr) { imports.recordMissing(pe.imageBase+iat+i,library+"!"+symbol); ++missing; std::cout<<"Missing import: "<<library<<"!"<<symbol<<"\n"; continue; }
+            std::array<uint8_t,8> b{};
+            for(unsigned j=0;j<8;++j) b[j]=uint8_t(addr>>(8*j));
+            if(mem.initialize(pe.imageBase+iat+i,b)!=GuestMemory64::Fault::none) return false;
+            ++resolved;
+        }
+    }
+    return false;
 }
 
 } // namespace genesis

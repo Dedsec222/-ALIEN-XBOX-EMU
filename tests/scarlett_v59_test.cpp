@@ -1,0 +1,5 @@
+#include "scarlett_cpu64.hpp"
+#include <cassert>
+#include <iostream>
+using namespace genesis;
+int main(){GuestMemory64 m;assert(m.map(0x1000,4096,7)==GuestMemory64::Fault::none);Cpu64State i;auto run=[&](auto b){assert(m.write(0x1000,b)==GuestMemory64::Fault::none);auto s=executeGuest64(m,0x1000,1,0x1900,nullptr,0,0,0,0,&i);assert(s.steps==1);return s;};std::array<uint8_t,4> op{0x48,0x0f,0xaf,0xd0};i.gpr[0]=uint64_t(-3);i.gpr[2]=7;auto s=run(op);assert(s.gpr[2]==uint64_t(-21)&&!s.cf&&!s.of);i.gpr[0]=2;i.gpr[2]=0x7fffffffffffffff;s=run(op);assert(s.gpr[2]==0xfffffffffffffffeull&&s.cf&&s.of);i.gpr[2]=0x12345678ffff0003;i.gpr[0]=4;s=run(std::array<uint8_t,4>{0x66,0x0f,0xaf,0xd0});assert(s.gpr[2]==0x12345678ffff000c&&!s.cf);i.gpr[2]=0xffffffff00000003;s=run(std::array<uint8_t,3>{0x0f,0xaf,0xd0});assert(s.gpr[2]==12&&!s.cf);i.gpr[0]=0x1800;i.gpr[2]=7;assert(m.write(0x1800,std::array<uint8_t,8>{3})==GuestMemory64::Fault::none);s=run(std::array<uint8_t,4>{0x48,0x0f,0xaf,0x10});assert(s.gpr[2]==21&&!s.cf);std::cout<<"V59 IMUL tests passed\n";}

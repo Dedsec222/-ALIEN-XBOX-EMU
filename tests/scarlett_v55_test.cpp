@@ -1,0 +1,5 @@
+#include "scarlett_cpu64.hpp"
+#include <cassert>
+#include <iostream>
+using namespace genesis;
+int main(){GuestMemory64 m;assert(m.map(0x1000,4096,7)==GuestMemory64::Fault::none);Cpu64State i;for(unsigned j=0;j<16;++j){i.xmm[0][j]=j;i.xmm[1][j]=j+32;i.ymmHigh[0][j]=255;}std::array<uint8_t,8> data{80,81,82,83,84,85,86,87};assert(m.write(0x1100,data)==GuestMemory64::Fault::none);auto run=[&](auto b){assert(m.write(0x1000,b)==GuestMemory64::Fault::none);auto s=executeGuest64(m,0x1000,1,0x1900,nullptr,0,0,0,0,&i);assert(s.steps==1);return s;};for(auto op:{0x12,0x16}){auto s=run(std::array<uint8_t,8>{0xc5,0xf8,uint8_t(op),5,0xf8,0,0,0});for(unsigned j=0;j<16;++j)assert(s.xmm[0][j]==((j/8==unsigned(op==0x16))?data[j%8]:j));for(auto v:s.ymmHigh[0])assert(!v);}auto s=run(std::array<uint8_t,4>{0xc5,0xf8,0x16,0xc1});assert(s.xmm[0][8]==32);run(std::array<uint8_t,8>{0xc5,0xf8,0x17,5,0xf8,0,0,0});assert(m.read(0x1100,data)==GuestMemory64::Fault::none);assert(data[0]==8&&data[7]==15);std::cout<<"V55 half-vector tests passed\n";}

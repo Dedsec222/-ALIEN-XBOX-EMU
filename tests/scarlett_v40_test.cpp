@@ -1,0 +1,5 @@
+#include "scarlett_cpu64.hpp"
+#include <cassert>
+#include <iostream>
+using namespace genesis;
+int main(){GuestMemory64 m;using F=GuestMemory64::Fault;assert(m.map(0x1000,4096,7)==F::none);Cpu64State init;init.xmm[0].fill(255);init.ymmHigh[0].fill(255);init.gpr[1]=0x123456789abcdef0ULL;auto run=[&](auto code){assert(m.write(0x1000,code)==F::none);auto s=executeGuest64(m,0x1000,1,0x1900,nullptr,0,0,0,0,&init);assert(s.steps==1&&s.rip==0x1000+code.size());return s;};auto s=run(std::array<uint8_t,5>{0xc4,0xe1,0xf9,0x7e,0xc1});assert(s.gpr[1]==~0ULL&&s.ymmHigh[0][0]==255);s=run(std::array<uint8_t,4>{0xc5,0xf9,0x7e,0xc1});assert(s.gpr[1]==0xffffffff);s=run(std::array<uint8_t,5>{0xc4,0xe1,0xf9,0x6e,0xc1});assert(s.xmm[0][0]==0xf0&&s.xmm[0][7]==0x12&&s.xmm[0][8]==0&&s.ymmHigh[0][0]==0);s=run(std::array<uint8_t,4>{0xc5,0xf9,0x6e,0xc1});assert(s.xmm[0][3]==0x9a&&s.xmm[0][4]==0);s=run(std::array<uint8_t,4>{0xc5,0xfa,0x7e,0xc0});assert(s.xmm[0][7]==255&&s.xmm[0][8]==0);std::cout<<"V40 tests passed\n";}

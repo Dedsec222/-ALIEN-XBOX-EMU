@@ -1,0 +1,5 @@
+#include "scarlett_imports64.hpp"
+#include <cassert>
+#include <iostream>
+using namespace genesis;
+int main(){GuestMemory64 m;ScarlettImports64 im;assert(im.install(m));im.setImageBase(0x140000000);assert(m.map(0x10000,4096,3)==GuestMemory64::Fault::none);auto reg=[&](const char*s){return im.registerImport("api-ms-win-core-libraryloader-l1-2-0.dll",s);};auto w=reg("GetModuleHandleW"),a=reg("GetModuleHandleA"),p=reg("GetProcAddress");auto q=im.registerImport("api-ms-win-core-profile-l1-1-0.dll","QueryPerformanceCounter");uint64_t r=0;assert(im.dispatch(w,m,0,r)&&r==0x140000000);auto str=[&](uint64_t addr,std::string s,bool wide){std::vector<uint8_t>b;for(char c:s){b.push_back(c);if(wide)b.push_back(0);}b.push_back(0);if(wide)b.push_back(0);assert(m.write(addr,b)==GuestMemory64::Fault::none);};str(0x10000,"API-MS-WIN-CORE-PROFILE-L1-1-0.DLL",true);assert(im.dispatch(w,m,0x10000,r)&&r);auto h=r;str(0x10100,"QueryPerformanceCounter",false);assert(im.dispatch(p,m,h,r,0x10100)&&r==q);str(0x10100,"unknown",false);assert(im.dispatch(p,m,h,r,0x10100)&&!r);assert(im.dispatch(a,m,0x10100,r)&&!r);assert(!im.dispatch(w,m,0x20000,r));std::cout<<"V17 loader tests passed\n";}

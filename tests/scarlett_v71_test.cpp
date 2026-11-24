@@ -1,0 +1,10 @@
+#include "scarlett_cpu64.hpp"
+#include <vector>
+#include <cassert>
+#include <iostream>
+using namespace genesis;
+int main(){GuestMemory64 m;assert(m.map(0x1000,4096,7)==GuestMemory64::Fault::none);unsigned count=0;
+for(unsigned n:{1u,2u,4u,8u})for(unsigned g=0;g<7;++g)for(bool imm:{false,true}){std::vector<uint8_t> c{0xf0};if(n==2)c.push_back(0x66);if(n==8)c.push_back(0x48);if(imm){c.push_back(n==1?0x80:0x83);c.push_back(uint8_t(g*8));c.push_back(3);}else{c.push_back(uint8_t(g*8+(n!=1)));c.push_back(8);}Cpu64State i;i.gpr[0]=0x1800;i.gpr[1]=3;i.cf=true;std::array<uint8_t,8>b{5};assert(m.write(0x1800,b)==GuestMemory64::Fault::none);assert(m.write(0x1000,c)==GuestMemory64::Fault::none);auto s=executeGuest64(m,0x1000,1,0x1900,nullptr,0,0,0,0,&i);assert(s.rip==0x1000+c.size());assert(m.read(0x1800,b)==GuestMemory64::Fault::none);unsigned expected[]={8,7,9,1,1,2,6};assert(b[0]==expected[g]);++count;}
+for(unsigned ext:{0xc1u,0xb1u})for(bool equal:{false,true}){Cpu64State i;i.gpr[0]=equal?5:7;i.gpr[2]=0x1800;i.gpr[1]=3;std::array<uint8_t,4>b{5};assert(m.write(0x1800,b)==GuestMemory64::Fault::none);assert(m.write(0x1000,std::array<uint8_t,4>{0xf0,0x0f,uint8_t(ext),0x0a})==GuestMemory64::Fault::none);auto s=executeGuest64(m,0x1000,1,0x1900,nullptr,0,0,0,0,&i);assert(s.rip==0x1004);assert(m.read(0x1800,b)==GuestMemory64::Fault::none);assert(b[0]==(ext==0xc1?8:equal?3:5));assert(ext==0xc1?s.gpr[1]==5:s.gpr[0]==5);++count;}
+Cpu64State i;i.gpr[0]=4;i.gpr[6]=0x1800;i.gpr[1]=0x80;assert(m.write(0x1810,std::array<uint8_t,4>{1})==GuestMemory64::Fault::none);assert(m.write(0x1000,std::array<uint8_t,4>{0xf0,9,0x0c,0x86})==GuestMemory64::Fault::none);auto s=executeGuest64(m,0x1000,1,0x1900,nullptr,0,0,0,0,&i);std::array<uint8_t,4>b{};assert(m.read(0x1810,b)==GuestMemory64::Fault::none);assert(s.rip==0x1004&&b[0]==129);++count;
+assert(m.write(0x1000,std::array<uint8_t,3>{0xf0,9,0xc8})==GuestMemory64::Fault::none);s=executeGuest64(m,0x1000,1,0x1900,nullptr,0,0,0,0,&i);assert(s.exit==Cpu64Exit::unsupported&&s.steps==0);++count;std::cout<<"V71 tests passed: "<<count<<" cases\n";}

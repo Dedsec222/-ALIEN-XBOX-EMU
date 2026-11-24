@@ -1,0 +1,4 @@
+#include "scarlett_cpu64.hpp"
+#include <cassert>
+using namespace genesis;
+int main(){GuestMemory64 m;ScarlettImports64 i;assert(i.install(m));assert(m.map(0x10000,4096,3)==GuestMemory64::Fault::none);auto a=i.registerImport("api-ms-win-core-sysinfo-l1-1-0.dll","GetLogicalProcessorInformation");auto e=i.registerImport("api-ms-win-core-errorhandling-l1-1-0.dll","GetLastError");assert(a&&e);uint64_t r=99;std::array<uint8_t,4> l{};assert(i.dispatch(a,m,0,r,0x10000)&&r==0);assert(i.dispatch(e,m,0,r)&&r==122);assert(m.read(0x10000,l)==GuestMemory64::Fault::none&&l[0]==96);assert(i.dispatch(a,m,0x10100,r,0x10000)&&r==1);std::array<uint8_t,96>b{};assert(m.read(0x10100,b)==GuestMemory64::Fault::none);assert(b[0]==1&&b[8]==0&&b[32]==1&&b[40]==1&&b[64]==1&&b[72]==3);assert(i.dispatch(a,m,0x20000,r,0x10000)&&r==0);puts("V51 topology tests passed");}

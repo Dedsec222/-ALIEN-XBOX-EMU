@@ -1,4 +1,8 @@
 #include "guest.hpp"
+#include "scarlett_probe.hpp"
+#include "scarlett_launch.hpp"
+#include "vulkan_transfer.hpp"
+#include <sys/resource.h>
 #include "pe.hpp"
 #include "guest_memory.hpp"
 #include "cpu64.hpp"
@@ -18,6 +22,9 @@ Java_com_dedsec_alienxbox_MainActivity_diagnostic(JNIEnv* env, jclass) {
            << "x86-64 guest loop (sum 1 through 9): " << (passed ? "PASS" : "FAIL")
            << "\nEAX: " << cpu.eax << "   ECX: " << cpu.ecx
            << "\nInstructions executed: " << cpu.steps << "\n";
+    report << genesis::scarlettProbe() << "\n";
+    struct rusage usage{};
+    if (getrusage(RUSAGE_SELF, &usage)==0) report << "Process peak RSS: " << usage.ru_maxrss << " KiB\n";
     uint32_t version = VK_API_VERSION_1_0;
     auto query = reinterpret_cast<PFN_vkEnumerateInstanceVersion>(
         vkGetInstanceProcAddr(VK_NULL_HANDLE, "vkEnumerateInstanceVersion"));
@@ -42,6 +49,27 @@ Java_com_dedsec_alienxbox_MainActivity_diagnostic(JNIEnv* env, jclass) {
                 for (const auto gpu : devices) {
                     VkPhysicalDeviceProperties props;
                     vkGetPhysicalDeviceProperties(gpu, &props);
+                    VkPhysicalDeviceMemoryProperties heaps{};
+                    vkGetPhysicalDeviceMemoryProperties(gpu,&heaps);
+                    for (uint32_t h=0;h<heaps.memoryHeapCount;++h)
+                        report<<"Heap "<<h<<": "<<(heaps.memoryHeaps[h].size>>20)<<" MiB"<<
+                            ((heaps.memoryHeaps[h].flags&VK_MEMORY_HEAP_DEVICE_LOCAL_BIT)?" device local":"")<<"\n";
+                    uint32_t families=0;
+                    vkGetPhysicalDeviceQueueFamilyProperties(gpu,&families,nullptr);
+                    std::vector<VkQueueFamilyProperties> queues(families);
+                    vkGetPhysicalDeviceQueueFamilyProperties(gpu,&families,queues.data());
+                    for (uint32_t q=0;q<families;++q)
+                        report<<"Queue "<<q<<": "<<queues[q].queueCount<<" flags 0x"<<std::hex<<queues[q].queueFlags<<std::dec<<"\n";
+                    for (uint32_t q=0;q<families;++q) {
+                        if (queues[q].queueCount && (queues[q].queueFlags&(VK_QUEUE_GRAPHICS_BIT|VK_QUEUE_COMPUTE_BIT|VK_QUEUE_TRANSFER_BIT))) {
+                            report<<"Vulkan transfer readback: "<<genesis::verifyTransfer(gpu,q)<<"\n";
+                            break;
+                        }
+                    }
+                    VkPhysicalDeviceFeatures features;
+                    vkGetPhysicalDeviceFeatures(gpu,&features);
+                    report<<"Sampled block compression: BC "<<features.textureCompressionBC
+                          <<", ASTC LDR "<<features.textureCompressionASTC_LDR<<", ETC2 "<<features.textureCompressionETC2<<"\n";
                     report << "GPU: " << props.deviceName << "\nDevice Vulkan: "
                            << VK_VERSION_MAJOR(props.apiVersion) << "." << VK_VERSION_MINOR(props.apiVersion)
                            << "." << VK_VERSION_PATCH(props.apiVersion) << "\n";
@@ -63,7 +91,7 @@ Java_com_dedsec_alienxbox_MainActivity_execute(JNIEnv* env, jclass, jbyteArray p
     if (env->ExceptionCheck()) return nullptr;
     const auto mapped = genesis::mapPe(file);
     if (mapped.error) return env->NewStringUTF(mapped.error);
-    const auto process = genesis::prepareProcess(file);
+    auto process = genesis::prepareProcess(file);
     if (process.error) return env->NewStringUTF(process.error);
     // Preserve the original bundled door-game ABI. External freestanding
     // homebrew uses the protected-memory CPU core with a real guest stack.
@@ -102,12 +130,25 @@ Java_com_dedsec_alienxbox_MainActivity_execute(JNIEnv* env, jclass, jbyteArray p
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_dedsec_alienxbox_MainActivity_validate(JNIEnv* env, jclass, jbyteArray program) {
-    const auto size = env->GetArrayLength(program);
-    if (size > 4 * 1024 * 1024) return env->NewStringUTF("Image exceeds 4 MiB.");
-    std::vector<uint8_t> data(size);
-    if (size) env->GetByteArrayRegion(program, 0, size, reinterpret_cast<jbyte*>(data.data()));
-    if (env->ExceptionCheck()) return nullptr;
-    auto process = genesis::prepareProcess(data);
-    return env->NewStringUTF(process.error ? process.error : "");
+Java_com_dedsec_alienxbox_MainActivity_mappedImage(JNIEnv* env,jclass,jobject buffer,jboolean run,jint budget) {
+    const auto length=env->GetDirectBufferCapacity(buffer);
+    auto data=static_cast<const uint8_t*>(env->GetDirectBufferAddress(buffer));
+    if (!data || length<=0 || length>(256LL<<20)) return env->NewStringUTF("Invalid mapped PE");
+    const std::span<const uint8_t> file(data,static_cast<size_t>(length));
+    const auto info=genesis::inspectPe(file);
+    if (info.error) return env->NewStringUTF(info.error);
+    if (!run) return env->NewStringUTF("");
+    try {
+        if (!info.imageBase) {
+            auto legacy=genesis::prepareProcess(file);
+            if (legacy.error) return env->NewStringUTF(legacy.error);
+            auto state=genesis::executeGuest(legacy.memory,legacy.entry,legacy.stackTop,std::clamp(budget,1000,100000));
+            std::ostringstream result;
+            const char* reasons[]={"Guest breakpoint","Guest halted","Unsupported guest instruction","Guest memory protection fault","Instruction budget exhausted"};
+            result<<reasons[static_cast<unsigned>(state.exit)]<<"\nRIP 0x"<<std::hex<<state.rip<<"\nRAX 0x"<<state.gpr[0]<<"\nInstructions "<<std::dec<<state.steps;
+            return env->NewStringUTF(result.str().c_str());
+        }
+        const auto result=genesis::launchScarlett(file,std::clamp(budget,1000,10000000));
+        return env->NewStringUTF(result.c_str());
+    } catch (const std::bad_alloc&) {return env->NewStringUTF("Host memory exhausted while mapping guest");}
 }

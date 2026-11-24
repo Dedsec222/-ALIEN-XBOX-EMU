@@ -1,0 +1,5 @@
+#include "scarlett_cpu64.hpp"
+#include <cassert>
+#include <iostream>
+using namespace genesis;
+int main(){GuestMemory64 m;assert(m.map(0x1000,4096,7)==GuestMemory64::Fault::none);Cpu64State i;i.gpr[0]=0x1100;i.xmm[1].fill(0x55);i.xmm[2].fill(0x77);i.ymmHigh[1].fill(0xff);std::array<uint8_t,16> data{};data.fill(0x33);auto run=[&](auto b){assert(m.write(0x1000,b)==GuestMemory64::Fault::none);auto s=executeGuest64(m,0x1000,1,0x1900,nullptr,0,0,0,0,&i);assert(s.steps==1);return s;};for(unsigned pp:{2u,3u}){unsigned w=pp==2?4:8;assert(m.write(0x1100,data)==GuestMemory64::Fault::none);auto s=run(std::array<uint8_t,4>{0xc5,uint8_t(0xf8|pp),0x10,0x08});for(unsigned j=0;j<16;++j){assert(s.xmm[1][j]==(j<w?0x33:0));assert(s.ymmHigh[1][j]==0);}s=run(std::array<uint8_t,4>{0xc5,uint8_t(0xe8|pp),0x10,0xc9});for(unsigned j=0;j<16;++j)assert(s.xmm[1][j]==(j<w?0x55:0x77));run(std::array<uint8_t,4>{0xc5,uint8_t(0xf8|pp),0x11,0x08});std::array<uint8_t,16> out{};assert(m.read(0x1100,out)==GuestMemory64::Fault::none);for(unsigned j=0;j<16;++j)assert(out[j]==(j<w?0x55:0x33));}std::cout<<"V57 scalar AVX tests passed\n";}

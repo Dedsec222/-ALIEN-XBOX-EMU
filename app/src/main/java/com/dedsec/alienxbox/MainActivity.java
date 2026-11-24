@@ -20,7 +20,15 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class MainActivity extends Activity {
     static { System.loadLibrary("alien_core"); }
     private static native String diagnostic();
-    private static native String validate(byte[] file);
+    private static final int MAX_PE_BYTES=256<<20;
+    private static native String mappedImage(java.nio.ByteBuffer file,boolean run,int budget);
+    private String mappedImage(File file,boolean run,int budget) throws IOException {
+        try (java.nio.channels.FileChannel channel=new FileInputStream(file).getChannel()) {
+            long size=channel.size();
+            if(size==0 || size>MAX_PE_BYTES) throw new IOException("PE size outside supported range");
+            return mappedImage(channel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY,0,size),run,budget);
+        }
+    }
     private static native String execute(byte[] file,int choice,int target,boolean bundled,int budget);
     private static final String ROOT="https://genesis.invalid/";
     private final ExecutorService io=Executors.newSingleThreadExecutor();
@@ -108,17 +116,31 @@ public class MainActivity extends Activity {
         }catch(RuntimeException ignored){}return "Imported homebrew";
     }
     private void importFile(Uri uri) throws Exception{
-        byte[] bytes=read(getContentResolver().openInputStream(uri),4<<20);
-        String issue=validate(bytes);
-        if(!issue.isEmpty())throw new IOException(issue);
-        StringBuilder hash=new StringBuilder();
-        for(byte b:MessageDigest.getInstance("SHA-256").digest(bytes))hash.append(String.format(Locale.ROOT,"%02x",b));
-        String id=hash.toString();
-        JSONArray games=array("games");
-        for(int i=0;i<games.length();i++)if(id.equals(games.getJSONObject(i).optString("id")))return;
-        Files.write(new File(getFilesDir(),id+".pe").toPath(),bytes);
-        games.put(obj("id",id,"name",name(uri),"size",bytes.length,"added",System.currentTimeMillis()));
-        prefs.edit().putString("games",games.toString()).commit();
+        File temp=File.createTempFile("guest",".pe",getFilesDir());
+        try {
+            MessageDigest digest=MessageDigest.getInstance("SHA-256");
+            long size=0;
+            try(InputStream in=getContentResolver().openInputStream(uri); OutputStream out=new FileOutputStream(temp)){
+                if(in==null)throw new IOException("Document unavailable");
+                byte[] buffer=new byte[65536];
+                for(int n;(n=in.read(buffer))!=-1;){
+                    size+=n;
+                    if(size>MAX_PE_BYTES)throw new IOException("PE exceeds 256 MiB");
+                    digest.update(buffer,0,n);
+                    out.write(buffer,0,n);
+                }
+            }
+            String issue=mappedImage(temp,false,0);
+            if(!issue.isEmpty())throw new IOException(issue);
+            StringBuilder hash=new StringBuilder();
+            for(byte b:digest.digest())hash.append(String.format(Locale.ROOT,"%02x",b));
+            String id=hash.toString();
+            JSONArray games=array("games");
+            for(int i=0;i<games.length();i++)if(id.equals(games.getJSONObject(i).optString("id")))return;
+            Files.move(temp.toPath(),new File(getFilesDir(),id+".pe").toPath(),java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            games.put(obj("id",id,"name",name(uri),"size",size,"added",System.currentTimeMillis()));
+            prefs.edit().putString("games",games.toString()).commit();
+        }finally{temp.delete();}
     }
     private void artwork(Uri uri,String id) throws IOException{
         if(!validId(id))throw new IOException("Select a game first.");
@@ -188,9 +210,9 @@ public class MainActivity extends Activity {
             io.execute(()->{
                 try{
                     boolean bundled="doors".equals(id);
-                    byte[] bytes=read(bundled?getAssets().open("doors.exe"):new FileInputStream(new File(getFilesDir(),id+".pe")),4<<20);
                     long start=SystemClock.elapsedRealtimeNanos();
-                    String result=execute(bytes,choice,bundled?random.nextInt(3)+1:0,bundled,limit).trim();
+                    String result=bundled?execute(read(getAssets().open("doors.exe"),4<<20),choice,random.nextInt(3)+1,true,limit)
+                        :mappedImage(new File(getFilesDir(),id+".pe"),true,limit);
                     String report=result+"\nExecution time: "+String.format(Locale.ROOT,"%.3f ms",(SystemClock.elapsedRealtimeNanos()-start)/1e6);
                     record(id,report);event("result",report);
                 }catch(Exception e){record(id,e.toString());event("error",e.getMessage());}
