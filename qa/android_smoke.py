@@ -106,27 +106,25 @@ def node_click(label, seconds=18):
                 adb("shell","input","tap",str((x+u)//2),str((y+v)//2));return True
     wait(locate,seconds)
 
-def select_download(filename):
-    time.sleep(1)
-    # Wide screens can expose the roots pane permanently. The picker can
-    # also reopen the folder selected during the previous import.
-    try:
-        node_click(filename,3)
-        return
-    except AssertionError:
-        pass
-    try:
-        node_click("Downloads",3)
-    except AssertionError:
-        node_click("Show roots")
-        node_click("Downloads")
-    try:
-        node_click(filename,6)
-    except AssertionError:
-        # List view exposes document display names even for thumbnail-only grid items.
-        node_click("List view",5)
-        node_click(filename)
-    time.sleep(1)
+def select_fixture(filename):
+    # adb push creates a physical file; the DownloadsProvider virtual root
+    # can omit it. Navigate through ExternalStorageProvider instead.
+    node_click("Show roots")
+    model = adb("shell","getprop","ro.product.model")
+    def storage_root():
+        adb("shell","uiautomator","dump","/sdcard/window.xml")
+        tree=ET.fromstring(adb("shell","cat","/sdcard/window.xml"))
+        for node in tree.iter("node"):
+            text=node.get("text","").casefold()
+            if text in {model.casefold(),"internal storage","internal shared storage","this device"} or "sdk_gphone" in text:
+                x,y,u,v=map(int,re.findall(r"\d+",node.get("bounds")))
+                adb("shell","input","tap",str((x+u)//2),str((y+v)//2))
+                return True
+        # On compact landscape layouts the device root can be below the fold.
+        adb("shell","input","swipe","180","590","180","215","300")
+    wait(storage_root,20)
+    node_click("Alien-QA")
+    node_click(filename)
 
 wait(lambda: js("document.querySelector('#engine')?.textContent==='ONLINE'"))
 wait(lambda: js("innerWidth>innerHeight && document.querySelector('.hero').getBoundingClientRect().width>100"))
@@ -153,19 +151,20 @@ assert js("prefs.favorites.includes('doors')")
 click("nav [data-page=Settings]")
 js("let t=document.querySelector('[data-pref=theme]');t.value='teal';t.dispatchEvent(new Event('change',{bubbles:true}))")
 click("nav [data-page=Library]")
-adb("push","app/src/main/assets/doors.exe","/sdcard/Download/Genesis-fixture.exe")
-adb("shell","am","broadcast","-a","android.intent.action.MEDIA_SCANNER_SCAN_FILE","-d","file:///sdcard/Download/Genesis-fixture.exe")
+adb("shell","mkdir","-p","/sdcard/Alien-QA")
+adb("push","app/src/main/assets/doors.exe","/sdcard/Alien-QA/Genesis-fixture.exe")
+adb("shell","am","broadcast","-a","android.intent.action.MEDIA_SCANNER_SCAN_FILE","-d","file:///sdcard/Alien-QA/Genesis-fixture.exe")
 click('[data-act="import"]')
-select_download("Genesis-fixture.exe")
+select_fixture("Genesis-fixture.exe")
 wait(lambda:js("data.games.length===2"))
 click('[data-detail]:not([data-detail=doors])')
 click('[data-act=play]')
 wait(lambda:js("document.querySelector('#dialogbody').textContent.includes('Guest breakpoint')"))
 click('#closeModal')
-adb("push","README.md","/sdcard/Download/invalid.txt")
-adb("shell","am","broadcast","-a","android.intent.action.MEDIA_SCANNER_SCAN_FILE","-d","file:///sdcard/Download/invalid.txt")
+adb("push","README.md","/sdcard/Alien-QA/invalid.txt")
+adb("shell","am","broadcast","-a","android.intent.action.MEDIA_SCANNER_SCAN_FILE","-d","file:///sdcard/Alien-QA/invalid.txt")
 click("nav [data-page=Library]");click('[data-act=import]')
-select_download("invalid.txt")
+select_fixture("invalid.txt")
 wait(lambda:js("document.querySelector('#dialogbody').textContent.includes('MZ header')"))
 click('#closeModal')
 click("nav [data-page=Diagnostics]")
@@ -176,10 +175,10 @@ assert js("document.querySelectorAll('#games .tile').length===1")
 click('[data-act=view]')
 assert js("document.querySelector('#games').classList.contains('list')")
 click('[data-detail]:not([data-detail=doors])')
-adb("push","app/src/main/assets/portals.webp","/sdcard/Download/Genesis-cover.webp")
-adb("shell","am","broadcast","-a","android.intent.action.MEDIA_SCANNER_SCAN_FILE","-d","file:///sdcard/Download/Genesis-cover.webp")
+adb("push","app/src/main/assets/portals.webp","/sdcard/Alien-QA/Genesis-cover.webp")
+adb("shell","am","broadcast","-a","android.intent.action.MEDIA_SCANNER_SCAN_FILE","-d","file:///sdcard/Alien-QA/Genesis-cover.webp")
 click("[data-act=art]")
-select_download("Genesis-cover.webp")
+select_fixture("Genesis-cover.webp")
 wait(lambda:js("game().art>0"))
 click("nav [data-page=Controller]")
 click('[data-act=bind][data-key=Confirm]')
