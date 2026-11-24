@@ -15,6 +15,7 @@ namespace genesis {
 class GuestMemory64 {
 public:
     static constexpr uint64_t PageSize = 4096;
+    uint64_t codeGeneration() const { return codeEpoch; }
 
     enum Permission : uint8_t {
         Read = 1,
@@ -55,6 +56,7 @@ public:
         if (count > 65536)
             return Fault::overflow;
 
+        if (permissions & Execute) ++codeEpoch;
         for (uint64_t i = 0; i < count; ++i) {
             pages.emplace(first + i, Page{permissions, nullptr});
         }
@@ -90,7 +92,11 @@ public:
         }
         if (overlapsSparse(address,length)) return Fault::permission;
         if (check(address,length,0)!=Fault::none) return Fault::unmapped;
-        for(uint64_t i=0;i<length;i+=PageSize) pages.erase((address+i)/PageSize);
+        for(uint64_t i=0;i<length;i+=PageSize) {
+            auto it=pages.find((address+i)/PageSize);
+            if(it->second.permissions & Execute) ++codeEpoch;
+            pages.erase(it);
+        }
         return Fault::none;
     }
 
@@ -196,6 +202,7 @@ public:
             auto& p = pages.contains(page) ? pages.at(page) :
                 sparseData.try_emplace(page,Page{Read|Write,nullptr}).first->second;
 
+            if (p.permissions & Execute) ++codeEpoch;
             if (!p.data)
                 p.data = std::make_unique<
                     std::array<uint8_t, PageSize>>();
@@ -241,6 +248,7 @@ public:
 
             auto& p = pages.at(page);
 
+            if (p.permissions & Execute) ++codeEpoch;
             if (!p.data)
                 p.data = std::make_unique<
                     std::array<uint8_t, PageSize>>();
@@ -266,6 +274,7 @@ public:
     }
 
 private:
+    uint64_t codeEpoch=0;
     struct Page {
         uint8_t permissions;
         std::unique_ptr<

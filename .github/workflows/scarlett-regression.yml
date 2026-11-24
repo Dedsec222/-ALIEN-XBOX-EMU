@@ -23,3 +23,7 @@ jobs:
         run: |
           c++ -O2 -std=c++20 -Wall -Wextra -Werror -Iapp/src/main/cpp tests/scarlett_v78_backend_test.cpp -o "$RUNNER_TEMP/backend"
           "$RUNNER_TEMP/backend"
+      - name: V79 cache regression
+        run: |
+          c++ -O2 -std=c++20 -Wall -Wextra -Werror -Iapp/src/main/cpp tests/scarlett_v79_cache_test.cpp -o "$RUNNER_TEMP/v79-cache"
+          "$RUNNER_TEMP/v79-cache"

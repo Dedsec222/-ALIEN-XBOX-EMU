@@ -29,9 +29,9 @@ inline std::string launchScarlett(std::span<const uint8_t> file, uint64_t budget
         case Cpu64Exit::breakpoint: reason="Guest breakpoint";break;
         case Cpu64Exit::budget: if(cpu.rip==sentinel) reason="Guest entry returned";break;
     }
-    out<<reason<<"\nScarlett V78 interpreter\nRIP 0x"<<std::hex<<cpu.rip<<"\nRAX 0x"<<cpu.gpr[0]
+    out<<reason<<"\nScarlett V79 experimental interpreter\nRIP 0x"<<std::hex<<cpu.rip<<"\nRAX 0x"<<cpu.gpr[0]
        <<"\nInstructions "<<std::dec<<cpu.steps<<"\nCommitted guest pages "<<memory.committedPages();
-    if (translate) out<<"\nARM64 blocks compiled "<<blocks.translations<<", executed "<<blocks.calls;
+    if (translate) out<<"\nARM64 blocks compiled "<<blocks.translations<<", executed "<<blocks.calls<<", compile attempts "<<blocks.compileAttempts<<", negative cache hits "<<blocks.negativeHits;
     return out.str();
 }
 }

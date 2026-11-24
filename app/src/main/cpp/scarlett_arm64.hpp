@@ -11,7 +11,7 @@ namespace genesis {
 // are eligible. Guest memory and control transfers stay in the interpreter.
 class Arm64Blocks {
 public:
-    uint64_t calls=0,translations=0;
+    uint64_t calls=0,translations=0,negativeHits=0,compileAttempts=0;
 #if defined(__aarch64__) && defined(__linux__)
 private:
     struct Block {
@@ -23,6 +23,9 @@ private:
     };
     std::unordered_map<uint64_t,std::unique_ptr<Block>> cache;
     bool denied=false;
+    const GuestMemory64* owner=nullptr;
+    uint64_t epoch=0;
+    std::unordered_map<uint64_t,bool> rejected;
     static std::unique_ptr<Block> compile(const GuestMemory64& mem,uint64_t start,bool& denied) {
         auto block=std::make_unique<Block>();
         // Up to six words per instruction, plus BTI C and RET.
@@ -86,24 +89,21 @@ public:
     bool run(const GuestMemory64& mem,uint64_t& rip,std::array<uint64_t,16>& regs,
              uint64_t& steps,uint64_t budget,uint64_t stop) {
         if(denied)return false;
-        auto it=cache.find(rip);
-        if(it!=cache.end()){
-            const Block& old=*it->second;
-            for(unsigned i=0;i<old.bytes;++i) {
-                uint8_t b;
-                if(!mem.fetchByte(rip+i,b) || b!=old.source[i]){
-                    cache.erase(it);it=cache.end();break;
-                }
-            }
+        if(owner!=&mem || epoch!=mem.codeGeneration()) {
+            cache.clear(); rejected.clear(); owner=&mem; epoch=mem.codeGeneration();
         }
+        auto it=cache.find(rip);
         if(it==cache.end()){
+            if(rejected.contains(rip)){++negativeHits;return false;}
             if(cache.size()>=64)return false;
+            ++compileAttempts;
             auto block=compile(mem,rip,denied);
-            if(!block)return false;
+            if(!block){if(rejected.size()<4096)rejected.emplace(rip,true);return false;}
             it=cache.emplace(rip,std::move(block)).first;
             ++translations;
         }
         const auto& block=*it->second;
+        for(unsigned i=0;i<block.bytes;++i){uint8_t b; if(!mem.fetchByte(rip+i,b)||b!=block.source[i]){cache.erase(it);return false;}}
         if (block.ops>budget-steps || (stop>=rip && stop-rip<block.bytes))return false;
         using Entry=void(*)(uint64_t*);
         reinterpret_cast<Entry>(block.code)(regs.data());
