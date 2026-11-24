@@ -96,7 +96,16 @@ def node_click(label, seconds=18):
     def locate():
         adb("shell","uiautomator","dump","/sdcard/window.xml")
         xml=ET.fromstring(adb("shell","cat","/sdcard/window.xml"))
+        parents={child:parent for parent in xml.iter() for child in parent}
         for node in xml.iter("node"):
+            if node.get("content-desc","").casefold()=="preview the file "+label.casefold():
+                parent=parents.get(node)
+                while parent is not None:
+                    if parent.get("clickable")=="true" and parent.get("class")!="android.widget.ImageButton":
+                        x,y,u,v=map(int,re.findall(r"\d+",parent.get("bounds")))
+                        adb("shell","input","tap",str(x+(u-x)//3),str((y+v)//2))
+                        return True
+                    parent=parents.get(parent)
             labels=[node.get(k,"").casefold() for k in ("text","content-desc")]
             names={label.casefold()}
             if "." in label:
@@ -109,6 +118,18 @@ def node_click(label, seconds=18):
 def select_fixture(filename):
     # adb push creates a physical file; the DownloadsProvider virtual root
     # can omit it. Navigate through ExternalStorageProvider instead.
+    def snapshot():
+        adb("shell","uiautomator","dump","/sdcard/window.xml")
+        return ET.fromstring(adb("shell","cat","/sdcard/window.xml"))
+    def select_file():
+        tree=snapshot()
+        switch=next((node for node in tree.iter("node") if node.get("content-desc")=="List view"),None)
+        if switch is not None:
+            node_click("List view")
+        node_click(filename)
+    if any(n.get("text")=="Files in Alien-QA" for n in snapshot().iter("node")):
+        select_file()
+        return
     node_click("Show roots")
     model = adb("shell","getprop","ro.product.model")
     def storage_root():
@@ -124,7 +145,7 @@ def select_fixture(filename):
         adb("shell","input","swipe","180","590","180","215","300")
     wait(storage_root,20)
     node_click("Alien-QA")
-    node_click(filename)
+    select_file()
 
 wait(lambda: js("document.querySelector('#engine')?.textContent==='ONLINE'"))
 wait(lambda: js("innerWidth>innerHeight && document.querySelector('.hero').getBoundingClientRect().width>100"))
