@@ -726,6 +726,106 @@ int main() {
 
     puts("TLS SUCCESS LASTERROR CLEARING PASSED");
 
+    {
+        const char* flsDll=
+            "api-ms-win-core-fibers-l1-1-0.dll";
+
+        const auto flsAlloc=
+            runtime.bind(flsDll,"FlsAlloc");
+        const auto flsFree=
+            runtime.bind(flsDll,"FlsFree");
+        const auto flsGet=
+            runtime.bind(flsDll,"FlsGetValue");
+        const auto flsSet=
+            runtime.bind(flsDll,"FlsSetValue");
+
+        if(!flsAlloc || !flsFree ||
+           !flsGet || !flsSet)
+            return 1;
+
+        auto flsCall=[&](uint64_t api,
+                         uint64_t a,
+                         uint64_t b,
+                         uint64_t& result){
+            return
+                runtime.imports.syncLastErrorFromTeb(
+                    runtime.memory) &&
+                runtime.imports.dispatch(
+                    api,runtime.memory,a,result,b) &&
+                runtime.imports.syncLastErrorToTeb(
+                    runtime.memory);
+        };
+
+        uint64_t result=0;
+
+        // Validate every currently supported FLS index.
+        for(uint32_t i=0;i<128;++i){
+            if(!flsCall(flsAlloc,0,0,result)
+               || result!=i)
+                return 1;
+
+            if(!flsCall(flsGet,i,0,result)
+               || result!=0)
+                return 1;
+
+            if(!flsCall(flsSet,i,
+                0xF1500000ULL+i,result)
+               || result!=1)
+                return 1;
+        }
+
+        puts("ALL 128 FLS INDICES ALLOCATED");
+
+        if(!flsCall(flsAlloc,0,0,result)
+           || result!=UINT32_MAX)
+            return 1;
+
+        puts("FLS EXHAUSTION HANDLING PASSED");
+
+        for(uint32_t i=0;i<128;++i){
+            if(!flsCall(flsGet,i,0,result)
+               || result!=0xF1500000ULL+i)
+                return 1;
+        }
+
+        puts("ALL FLS VALUES VERIFIED");
+
+        for(uint32_t i=0;i<128;++i){
+            if(!flsCall(flsFree,i,0,result)
+               || result!=1)
+                return 1;
+        }
+
+        if(!flsCall(flsAlloc,0,0,result)
+           || result!=0)
+            return 1;
+
+        if(!flsCall(flsGet,0,0,result)
+           || result!=0)
+            return 1;
+
+        puts("FLS SLOT REUSE AND ZEROING PASSED");
+
+        if(!flsCall(flsGet,9999,0,result)
+           || result!=0)
+            return 1;
+
+        uint32_t flsError=0;
+        memcpy(&flsError,teb+0x68,4);
+
+        if(flsError!=87)
+            return 1;
+
+        puts("FLS LASTERROR PROPAGATION PASSED");
+
+        if(!flsCall(flsFree,0,0,result)
+           || result!=1)
+            return 1;
+
+        puts("FLS CLEANUP PASSED");
+    }
+
+
     if(!errorCall(errorSet,0x1234,errorResult))
         return 1;
 
