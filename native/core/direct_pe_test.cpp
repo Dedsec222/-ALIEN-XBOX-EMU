@@ -1,3 +1,4 @@
+#include "../fex/scarlett_memory_adapter.hpp"
 #include "direct_pe_loader.hpp"
 #include <cstdio>
 #include <cstdlib>
@@ -162,6 +163,42 @@ int main() {
     }
 
     CHECK(rejected);
+
+
+    genesis::GuestMemory64 shared;
+    alien::connectPeMemory(shared, loader);
+
+    using Fault = genesis::GuestMemory64::Fault;
+
+    const uint64_t address = relocated + p * 2;
+
+    std::array<uint8_t,8> data{
+        0x88,0x77,0x66,0x55,
+        0x44,0x33,0x22,0x11
+    };
+
+    CHECK(shared.write(address,data) == Fault::none);
+
+    uint64_t actual = 0;
+    CHECK(loader.read(address,&actual,8));
+    CHECK(actual == 0x1122334455667788ULL);
+
+    actual = 0x8877665544332211ULL;
+    CHECK(loader.write(address,&actual,8));
+
+    std::array<uint8_t,8> output{};
+    CHECK(shared.read(address,output) == Fault::none);
+    CHECK(output[0] == 0x11);
+    CHECK(output[7] == 0x88);
+
+    CHECK(shared.write(loader.entry(),data)
+        == Fault::permission);
+
+    CHECK(shared.check(loader.entry(),1,
+        genesis::GuestMemory64::Execute)
+        == Fault::none);
+
+    std::puts("SCARLETT SHARED PE MEMORY PASSED");
 
     std::puts("ALL DIRECT PE TESTS PASSED");
     return 0;

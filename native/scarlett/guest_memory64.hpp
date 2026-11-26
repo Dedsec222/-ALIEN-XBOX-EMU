@@ -1,3 +1,4 @@
+#include <functional>
 #pragma once
 
 #include <array>
@@ -30,6 +31,39 @@ public:
         overflow
     };
 
+
+
+    using ExternalCheck = std::function<
+        Fault(uint64_t,uint64_t,uint8_t)>;
+
+    using ExternalRead = std::function<
+        Fault(uint64_t,std::span<uint8_t>)>;
+
+    using ExternalWrite = std::function<
+        Fault(uint64_t,std::span<const uint8_t>)>;
+
+    using ExternalContains = std::function<
+        bool(uint64_t)>;
+
+    void bindExternalMemory(
+        ExternalContains contains,
+        ExternalCheck check,
+        ExternalRead read,
+        ExternalWrite write) {
+
+        externalContains = std::move(contains);
+        externalCheck = std::move(check);
+        externalRead = std::move(read);
+        externalWrite = std::move(write);
+    }
+
+private:
+    ExternalContains externalContains;
+    ExternalCheck externalCheck;
+    ExternalRead externalRead;
+    ExternalWrite externalWrite;
+
+public:
 
     // V80 reservation engine
 private:
@@ -236,6 +270,11 @@ public:
 
     Fault check(uint64_t address, uint64_t length,
                 uint8_t required) const {
+        if (externalContains &&
+            externalContains(address))
+            return externalCheck(
+                address, length, required);
+
         if (length > UINT64_MAX - address)
             return Fault::overflow;
 
@@ -296,6 +335,10 @@ public:
 
     Fault read(uint64_t address,
                std::span<uint8_t> output) const {
+        if (externalContains &&
+            externalContains(address))
+            return externalRead(address, output);
+
         // V80 J3: ordinary single-page read fast path.
         if(!output.empty() &&
            output.size()<=UINT64_MAX-address &&
@@ -356,6 +399,10 @@ public:
 
     Fault write(uint64_t address,
                 std::span<const uint8_t> input) {
+        if (externalContains &&
+            externalContains(address))
+            return externalWrite(address, input);
+
         // V80 J3: ordinary single-page write fast path.
         if(!input.empty() &&
            input.size()<=UINT64_MAX-address &&
