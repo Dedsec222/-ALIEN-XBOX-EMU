@@ -52,6 +52,24 @@ struct ImportReport {
     std::vector<PeImport> unresolved;
 };
 
+
+struct PeTlsDirectory {
+    uint32_t rva{};
+    uint32_t size{};
+};
+
+struct PeTlsInfo {
+    uint64_t template_start{};
+    uint64_t template_end{};
+    uint64_t index_address{};
+    uint64_t callbacks_address{};
+    uint32_t zero_fill{};
+    uint32_t characteristics{};
+
+    std::vector<std::byte> initial_data;
+    std::vector<uint64_t> callbacks;
+};
+
 class Pe64Image {
 public:
     using Resolver = std::function<
@@ -65,6 +83,8 @@ public:
 
     std::vector<PeSection> sections;
     std::vector<PeImport> imports;
+    std::optional<PeTlsDirectory> tls_directory;
+
     std::vector<std::byte> image;
 
     static Pe64Image parse(
@@ -254,7 +274,131 @@ public:
                 fail("Invalid import directory");
         }
 
+        
+        if(directory_count>=10){
+            if(optional_size<192)
+                fail("Truncated TLS directory");
+
+            const auto rva=
+                read<uint32_t>(file,opt+184);
+
+            const auto size=
+                read<uint32_t>(file,opt+188);
+
+            if(rva || size){
+                if(!rva || size<40)
+                    fail("Invalid PE64 TLS directory");
+
+                requireRange(pe.image,rva,size);
+
+                pe.tls_directory=
+                    PeTlsDirectory{rva,size};
+            }
+        }
+
         return pe;
+
+    }
+
+    
+    std::optional<PeTlsInfo> readTls(
+        uint64_t mapped_base) const {
+
+        if(!tls_directory)
+            return std::nullopt;
+
+        const uint64_t d=tls_directory->rva;
+
+        requireRange(image,d,40);
+
+        PeTlsInfo tls;
+
+        tls.template_start=read<uint64_t>(image,d);
+        tls.template_end=read<uint64_t>(image,d+8);
+        tls.index_address=read<uint64_t>(image,d+16);
+        tls.callbacks_address=read<uint64_t>(image,d+24);
+        tls.zero_fill=read<uint32_t>(image,d+32);
+        tls.characteristics=read<uint32_t>(image,d+36);
+
+        auto toRva=[&](uint64_t va,uint64_t length){
+            if(va<mapped_base)
+                fail("TLS address below image");
+
+            const uint64_t rva=va-mapped_base;
+            requireRange(image,rva,length);
+            return rva;
+        };
+
+        if(tls.template_end<tls.template_start)
+            fail("Invalid TLS template range");
+
+        const uint64_t length=
+            tls.template_end-tls.template_start;
+
+        constexpr uint64_t limit=64ULL<<20;
+
+        if(length>limit ||
+           tls.zero_fill>limit-length)
+            fail("TLS allocation exceeds safety limit");
+
+        if(tls.template_start || tls.template_end){
+            const auto rva=
+                toRva(tls.template_start,length);
+
+            tls.initial_data.assign(
+                image.begin()+rva,
+                image.begin()+rva+length);
+        }
+
+        if(!tls.index_address)
+            fail("Missing TLS index address");
+
+        toRva(tls.index_address,4);
+
+        if(tls.callbacks_address){
+            uint64_t cursor=
+                toRva(tls.callbacks_address,8);
+
+            bool terminated=false;
+
+            for(size_t i=0;i<4096;++i){
+                const auto callback=
+                    read<uint64_t>(image,cursor);
+
+                if(!callback){
+                    terminated=true;
+                    break;
+                }
+
+                const auto rva=toRva(callback,1);
+
+                bool executable=false;
+
+                for(const auto& section:sections){
+                    const uint64_t size=std::max(
+                        section.virtual_size,
+                        section.raw_size);
+
+                    if(section.executable() &&
+                       rva>=section.virtual_address &&
+                       rva-section.virtual_address<size){
+                        executable=true;
+                        break;
+                    }
+                }
+
+                if(!executable)
+                    fail("Non-executable TLS callback");
+
+                tls.callbacks.push_back(callback);
+                cursor+=8;
+            }
+
+            if(!terminated)
+                fail("Unterminated TLS callback array");
+        }
+
+        return tls;
     }
 
     ImportReport resolveImports(

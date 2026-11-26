@@ -1,3 +1,4 @@
+#include "static_tls.hpp"
 #include "shared_runtime_memory.hpp"
 #include "scarlett_dispatch.hpp"
 #include "scarlett_memory_adapter.hpp"
@@ -265,6 +266,76 @@ int main() {
             dll, names[i], 0, false, slot
         });
     }
+
+    
+    // Synthetic PE64 static TLS directory.
+    const uint64_t tlsDir=page*2+0x100;
+    const uint64_t tlsTemplate=page*2+0x180;
+    const uint64_t tlsIndex=page*2+0x200;
+    const uint64_t tlsCallbacks=page*2+0x220;
+
+    const uint64_t callback1=page+0x400;
+    const uint64_t callback2=page+0x440;
+    const uint64_t callbackReturn=page+0x480;
+
+    auto pePut64=[&](uint64_t rva,uint64_t value){
+        memcpy(pe.image.data()+rva,&value,8);
+    };
+
+    auto pePut32=[&](uint64_t rva,uint32_t value){
+        memcpy(pe.image.data()+rva,&value,4);
+    };
+
+    pe.tls_directory=alien::PeTlsDirectory{
+        uint32_t(tlsDir),40
+    };
+
+    pePut64(tlsDir,pe.image_base+tlsTemplate);
+    pePut64(tlsDir+8,pe.image_base+tlsTemplate+8);
+    pePut64(tlsDir+16,pe.image_base+tlsIndex);
+    pePut64(tlsDir+24,pe.image_base+tlsCallbacks);
+
+    pePut32(tlsDir+32,24);
+    pePut32(tlsDir+36,0x500000);
+
+    pePut64(tlsTemplate,0x1122334455667788ULL);
+    pePut32(tlsIndex,UINT32_MAX);
+
+    pePut64(tlsCallbacks,pe.image_base+callback1);
+    pePut64(tlsCallbacks+8,pe.image_base+callback2);
+    pePut64(tlsCallbacks+16,0);
+
+    // Callback 1:
+    // Read GS:[0x58], dereference TLS vector,
+    // write DLL_PROCESS_ATTACH reason to TLS+8.
+    const uint8_t cb1[]={
+        0x65,0x48,0x8B,0x04,0x25,
+        0x58,0x00,0x00,0x00,
+        0x48,0x8B,0x00,
+        0x48,0x89,0x50,0x08,
+        0xC3
+    };
+
+    // Callback 2:
+    // Read callback 1's value, increment it,
+    // and store the result at TLS+16.
+    const uint8_t cb2[]={
+        0x65,0x48,0x8B,0x04,0x25,
+        0x58,0x00,0x00,0x00,
+        0x48,0x8B,0x00,
+        0x48,0x8B,0x50,0x08,
+        0x48,0xFF,0xC2,
+        0x48,0x89,0x50,0x10,
+        0xC3
+    };
+
+    memcpy(pe.image.data()+callback1,
+           cb1,sizeof(cb1));
+
+    memcpy(pe.image.data()+callback2,
+           cb2,sizeof(cb2));
+
+    pe.image[callbackReturn]=std::byte{0xCC};
 
     const uint64_t thunkBase = CodeBase;
     HLECodeBase = thunkBase;
@@ -944,6 +1015,63 @@ int main() {
 
     puts("16 GIB NATIVE SPARSE MAPPING PASSED");
 
+    
+    alien::StaticTls staticTls;
+
+    if(!staticTls.initialize(
+        loader,runtime.memory,tebAddress)){
+        puts("STATIC TLS INITIALIZATION FAILED");
+        return 1;
+    }
+
+    if(staticTls.callbacks.size()!=2)
+        return 1;
+
+    uint32_t staticIndex=UINT32_MAX;
+
+    if(!loader.read(
+        loader.base()+tlsIndex,
+        &staticIndex,4) ||
+        staticIndex!=0)
+        return 1;
+
+    puts("PE STATIC TLS INDEX PASSED");
+
+    std::array<uint8_t,32> staticData{};
+
+    if(runtime.memory.read(
+        staticTls.block,staticData)
+        !=Fault::none)
+        return 1;
+
+    uint64_t templateValue=0;
+    memcpy(&templateValue,staticData.data(),8);
+
+    if(templateValue!=0x1122334455667788ULL)
+        return 1;
+
+    puts("STATIC TLS TEMPLATE COPY PASSED");
+
+    for(size_t i=8;i<staticData.size();++i){
+        if(staticData[i]!=0)
+            return 1;
+    }
+
+    puts("STATIC TLS ZERO FILL PASSED");
+
+    if(staticTls.block%16)
+        return 1;
+
+    puts("STATIC TLS ALIGNMENT PASSED");
+
+    uint64_t vectorPointer=0;
+    memcpy(&vectorPointer,teb+0x58,8);
+
+    if(vectorPointer!=staticTls.vectorAddress)
+        return 1;
+
+    puts("NATIVE STATIC TLS VECTOR PASSED");
+
     FEXCore::Core::CPUState initial{};
     initial.gregs[14]=sparseBase;
     initial.gregs[15]=sparseEnd;
@@ -1043,6 +1171,105 @@ int main() {
     thread->CurrentFrame->Pointers
         .SynchronousExceptionHandler =
         reinterpret_cast<uintptr_t>(&ExceptionHandler);
+
+    
+    
+    std::array<uint64_t,16> savedGprs{};
+
+    for(size_t i=0;i<16;++i)
+        savedGprs[i]=state.gregs[i];
+
+    const uint64_t savedRip=state.rip;
+    const uint64_t savedGs=state.gs_cached;
+    const uint64_t savedCallret=state.callret_sp;
+
+    auto restoreGuestState=[&](){
+        for(size_t i=0;i<16;++i)
+            state.gregs[i]=savedGprs[i];
+
+        state.rip=savedRip;
+        state.gs_cached=savedGs;
+        state.callret_sp=savedCallret;
+    };
+
+
+    const uint64_t returnTrap=
+        loader.base()+callbackReturn;
+
+    for(const uint64_t callback:staticTls.callbacks){
+
+        restoreGuestState();
+
+        const uint64_t callbackRsp=
+            (reinterpret_cast<uint64_t>(
+                stack+page)-64)&~15ULL;
+
+        // Windows x64 function entry: RSP % 16 == 8.
+        const uint64_t entryRsp=callbackRsp-8;
+
+        memcpy(reinterpret_cast<void*>(entryRsp),
+               &returnTrap,8);
+
+        state.rip=callback;
+        state.gregs[1]=loader.base();
+        state.gregs[2]=1;
+        state.gregs[8]=0;
+        state.gregs[4]=entryRsp;
+        state.callret_sp=callretTop;
+
+        thread->CurrentFrame->SynchronousFaultData={};
+
+        SavedFrame=nullptr;
+        UnexpectedSyscall=false;
+
+        if(setjmp(ExitPoint)==0){
+            ctx->ExecuteThread(thread);
+        }
+
+        if(!SavedFrame ||
+           UnexpectedSyscall ||
+           SavedFrame->SynchronousFaultData.Signal
+               !=FEXCore::Core::FAULT_SIGTRAP ||
+           SavedFrame->State.rip!=returnTrap+1 ||
+           SavedFrame->State.gregs[4]!=entryRsp+8){
+
+            puts("STATIC TLS CALLBACK EXECUTION FAILED");
+            return 1;
+        }
+
+        printf("FEX TLS CALLBACK PASSED: 0x%llx\n",
+            (unsigned long long)callback);
+    }
+
+    std::array<uint8_t,16> callbackResults{};
+
+    if(runtime.memory.read(
+        staticTls.block+8,callbackResults)
+        !=Fault::none)
+        return 1;
+
+    uint64_t firstResult=0;
+    uint64_t secondResult=0;
+
+    memcpy(&firstResult,callbackResults.data(),8);
+    memcpy(&secondResult,callbackResults.data()+8,8);
+
+    if(firstResult!=1 || secondResult!=2){
+        puts("TLS CALLBACK ORDER VALIDATION FAILED");
+        return 1;
+    }
+
+    puts("FEX STATIC TLS DEREFERENCE PASSED");
+    puts("TLS CALLBACK EXECUTION ORDER PASSED");
+
+    // Restore original entry-point state.
+    restoreGuestState();
+    state.callret_sp=callretTop;
+
+    thread->CurrentFrame->SynchronousFaultData={};
+
+    SavedFrame=nullptr;
+    UnexpectedSyscall=false;
 
     puts("Entering FEXCore guest execution...");
     fflush(stdout);
@@ -1336,6 +1563,16 @@ int main() {
         "NATIVE TLS EXPANSION CLEANUP FAILED");
 
     ctx->DestroyThread(thread);
+
+    const bool staticCleanup=
+        staticTls.cleanup(runtime.memory,tebAddress);
+
+    puts(staticCleanup?
+        "STATIC TLS CLEANUP PASSED":
+        "STATIC TLS CLEANUP FAILED");
+
+    passed=passed && staticCleanup;
+
 
 
     const bool crtClean=

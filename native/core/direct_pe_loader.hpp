@@ -38,6 +38,12 @@ public:
         return imports_;
     }
 
+    
+    const std::optional<PeTlsInfo>& tls()
+        const noexcept {
+        return tls_;
+    }
+
     void load(
         Pe64Image pe,
         uint64_t requested_base = 0,
@@ -66,8 +72,15 @@ public:
         if (rounded > UINT64_MAX - target)
             fail("Image address overflow");
 
+        
         if (target != pe.image_base)
             relocate(pe, target);
+
+        auto tlsInfo=pe.readTls(target);
+
+        // TLS metadata now contains relocated guest VAs.
+
+        
 
         // Unresolved imports are deliberately zeroed.
         // Never invent successful runtime bindings.
@@ -173,6 +186,24 @@ public:
                 first = last;
             }
 
+            
+            if(tlsInfo){
+                const uint64_t offset=
+                    tlsInfo->index_address-target;
+
+                const size_t firstIndexPage=offset/page;
+                const size_t lastIndexPage=(offset+3)/page;
+
+                for(size_t i=firstIndexPage;
+                    i<=lastIndexPage;++i){
+
+                    if(!(permissions[i]&Memory::Write))
+                        fail("TLS index is not writable");
+                }
+            }
+
+            tls_ = std::move(tlsInfo);
+
             permissions_ = std::move(permissions);
             imports_ = std::move(report);
 
@@ -273,6 +304,8 @@ private:
 
     std::vector<uint8_t> permissions_;
     ImportReport imports_;
+    std::optional<PeTlsInfo> tls_;
+
 
     [[noreturn]]
     static void fail(const char* message) {
