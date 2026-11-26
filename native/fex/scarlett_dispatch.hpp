@@ -38,6 +38,8 @@ public:
 
         imports.enableNativeXboxMemory();
 
+        imports.enableNativeCrt();
+
         return imports.install(memory);
 
 

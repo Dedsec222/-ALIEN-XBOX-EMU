@@ -32,7 +32,18 @@ public:
     static constexpr uint64_t StubBase = 0x600000000000ull;
     static constexpr uint64_t StubSize = 8192;
 
-    static constexpr uint64_t CrtBase=0x740000000000ull;
+    static constexpr uint64_t LegacyCrtBase =
+        0x740000000000ULL;
+
+    static constexpr uint64_t NativeCrtBase =
+        0x4000000000ULL;
+
+    uint64_t CrtBase=LegacyCrtBase;
+
+    void enableNativeCrt() {
+        CrtBase=NativeCrtBase;
+    }
+
     bool install(GuestMemory64& memory) {
         if(memory.map(CrtBase,4096,GuestMemory64::Read|GuestMemory64::Write)!=GuestMemory64::Fault::none)return false;
         const std::array<uint8_t,4> argc{1,0,0,0};

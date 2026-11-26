@@ -83,7 +83,16 @@ public:
     }
 
     size_t directHeapCount() const {
-        return directHeapMappings.size();
+        size_t count=0;
+
+        for(const auto& [address,length]:
+            directHeapMappings) {
+            if(address>=DirectHeapBase &&
+               address<DirectHeapLimit)
+                ++count;
+        }
+
+        return count;
     }
 
     uint64_t codeGeneration() const { return codeEpoch; }
@@ -363,11 +372,18 @@ public:
         if (count > 65536)
             return Fault::overflow;
 
-        if (directHeapEnabled &&
-            address>=DirectHeapBase &&
-            address<DirectHeapLimit) {
+        const bool nativeCrt =
+            directHeapEnabled &&
+            address==0x4000000000ULL &&
+            length==PageSize;
 
-            if(length>DirectHeapLimit-address ||
+        if (nativeCrt ||
+            (directHeapEnabled &&
+             address>=DirectHeapBase &&
+             address<DirectHeapLimit)) {
+
+            if((!nativeCrt &&
+                length>DirectHeapLimit-address) ||
                permissions!=(Read|Write))
                 return Fault::permission;
 

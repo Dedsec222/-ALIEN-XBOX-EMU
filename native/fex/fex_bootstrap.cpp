@@ -131,6 +131,26 @@ int main() {
     // mov [r15], r10
     0x4D,0x89,0x17,
 
+    
+    // mov r10, 0x4000000000
+    0x49,0xBA,0x00,0x00,0x00,0x00,
+    0x40,0x00,0x00,0x00,
+
+    // mov ecx, [r10+8] (argc)
+    0x41,0x8B,0x4A,0x08,
+
+    // mov rdx, [r10+16] (argv)
+    0x49,0x8B,0x52,0x10,
+
+    // mov rdx, [rdx] (argv[0])
+    0x48,0x8B,0x12,
+
+    // movzx r8d, byte ptr [rdx]
+    0x44,0x0F,0xB6,0x02,
+
+    // mov dword ptr [r10], 0x12345678
+    0x41,0xC7,0x02,0x78,0x56,0x34,0x12,
+
     0xCC
     };
 
@@ -866,7 +886,53 @@ int main() {
         passed=passed && sparseOK;
     }
 
+    
+    if(passed && SavedFrame){
+        std::array<uint8_t,4> crtResult{};
+
+        const bool readable=
+            runtime.memory.read(
+                runtime.imports.CrtBase,crtResult)
+            ==genesis::GuestMemory64::Fault::none;
+
+        uint32_t commode=0;
+        memcpy(&commode,crtResult.data(),4);
+
+        const auto& regs=SavedFrame->State.gregs;
+
+        const bool argcOK=regs[1]==1;
+        const bool argvOK=regs[8]=='g';
+        const bool writeOK=
+            readable && commode==0x12345678;
+
+        puts(argcOK?
+            "FEX CRT ARGC ACCESS PASSED":
+            "FEX CRT ARGC ACCESS FAILED");
+
+        puts(argvOK?
+            "FEX CRT ARGV DEREFERENCE PASSED":
+            "FEX CRT ARGV DEREFERENCE FAILED");
+
+        puts(writeOK?
+            "FEX CRT GLOBAL WRITE PASSED":
+            "FEX CRT GLOBAL WRITE FAILED");
+
+        passed=passed && argcOK && argvOK && writeOK;
+    }
+
     ctx->DestroyThread(thread);
+
+    const bool crtClean=
+        runtime.memory.unmap(
+            runtime.imports.CrtBase,4096)
+        ==genesis::GuestMemory64::Fault::none;
+
+    puts(crtClean?
+        "NATIVE CRT CLEANUP PASSED":
+        "NATIVE CRT CLEANUP FAILED");
+
+    passed=passed && crtClean;
+
 
     const bool sparseClean=
         runtime.memory.unmap(
