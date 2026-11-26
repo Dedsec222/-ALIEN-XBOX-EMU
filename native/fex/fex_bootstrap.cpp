@@ -1179,6 +1179,19 @@ int main() {
     for(size_t i=0;i<16;++i)
         savedGprs[i]=state.gregs[i];
 
+    
+    const uint32_t savedFlags=
+        ctx->ReconstructCompactedEFLAGS(
+            thread,false,nullptr,0);
+
+    std::array<__uint128_t,16> savedXmm{};
+    std::array<__uint128_t,16> savedYmm{};
+
+    ctx->ReconstructXMMRegisters(
+        thread,savedXmm.data(),savedYmm.data());
+
+    const uint32_t savedMxcsr=state.mxcsr;
+
     const uint64_t savedRip=state.rip;
     const uint64_t savedGs=state.gs_cached;
     const uint64_t savedCallret=state.callret_sp;
@@ -1190,6 +1203,15 @@ int main() {
         state.rip=savedRip;
         state.gs_cached=savedGs;
         state.callret_sp=savedCallret;
+
+        ctx->SetFlagsFromCompactedEFLAGS(
+            thread,savedFlags);
+
+        ctx->SetXMMRegistersFromState(
+            thread,savedXmm.data(),savedYmm.data());
+
+        state.mxcsr=savedMxcsr;
+
     };
 
 
