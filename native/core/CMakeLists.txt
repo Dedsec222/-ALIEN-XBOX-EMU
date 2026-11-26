@@ -48,3 +48,36 @@ add_test(
     NAME direct_guest_memory
     COMMAND direct_memory_test
 )
+
+add_executable(
+    direct_pe_probe
+    direct_pe_probe.cpp
+)
+
+target_link_libraries(
+    direct_pe_probe PRIVATE alien_core
+)
+
+target_compile_options(
+    direct_pe_probe PRIVATE
+    -Wall -Wextra -Wpedantic
+)
+
+add_executable(
+    direct_pe_test
+    direct_pe_test.cpp
+)
+
+target_link_libraries(
+    direct_pe_test PRIVATE alien_core
+)
+
+target_compile_options(
+    direct_pe_test PRIVATE
+    -Wall -Wextra -Wpedantic
+)
+
+add_test(
+    NAME direct_pe_loader
+    COMMAND direct_pe_test
+)
