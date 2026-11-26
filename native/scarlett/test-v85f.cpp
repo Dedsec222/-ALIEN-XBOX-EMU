@@ -1,0 +1,5 @@
+#include "scarlett_unwind64.hpp"
+#include <cassert>
+#include <iostream>
+using namespace genesis;
+int main(){GuestMemory64 m;assert(m.map(0x10000,0x4000,3)==GuestMemory64::Fault::none);auto put=[&](uint64_t a,uint64_t v,unsigned n){std::array<uint8_t,8>b{};for(unsigned i=0;i<n;++i)b[i]=v>>(8*i);assert(m.write(a,std::span<uint8_t>(b).first(n))==GuestMemory64::Fault::none);};auto get=[&](uint64_t a){std::array<uint8_t,8>b{};assert(m.read(a,b)==GuestMemory64::Fault::none);uint64_t v=0;for(unsigned i=0;i<8;++i)v|=uint64_t(b[i])<<(8*i);return v;};put(0x10100,0x200,4);put(0x10104,0x300,4);put(0x10108,0x400,4);put(0x10400,0x00020501,4);put(0x10404,0x3205,2);put(0x10406,0x3001,2);put(0x11000+152,0x12000,8);put(0x12020,0xabc,8);put(0x12028,0x123456,8);uint64_t frame=0;assert(unwindProlog64(m,0x10000,0x10205,0x10100,0x11000,frame));assert(get(0x11000+144)==0xabc);assert(get(0x11000+152)==0x12030);assert(get(0x11000+248)==0x123456);assert(!unwindProlog64(m,0x10000,0x10206,0x10100,0x11000,frame));std::cout<<"V85F unwind foundation tests passed\n";}
