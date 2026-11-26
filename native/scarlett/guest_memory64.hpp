@@ -1,3 +1,6 @@
+#include <sys/mman.h>
+#include <unistd.h>
+#include <cstring>
 #include <functional>
 #pragma once
 
@@ -16,6 +19,29 @@ namespace genesis {
 class GuestMemory64 {
 public:
     static constexpr uint64_t PageSize = 4096;
+
+    static constexpr uint64_t DirectHeapBase =
+        0x800000000ULL;
+
+    static constexpr uint64_t DirectHeapLimit =
+        0x1000000000ULL;
+
+    bool enableDirectHeap() {
+        if (sysconf(_SC_PAGESIZE) != PageSize)
+            return false;
+        directHeapEnabled = true;
+        return true;
+    }
+
+    ~GuestMemory64() {
+        for (const auto& [a,n] : directHeapMappings)
+            munmap(reinterpret_cast<void*>(a),n);
+    }
+
+    size_t directHeapCount() const {
+        return directHeapMappings.size();
+    }
+
     uint64_t codeGeneration() const { return codeEpoch; }
 
     enum Permission : uint8_t {
@@ -220,6 +246,47 @@ public:
         if (count > 65536)
             return Fault::overflow;
 
+        if (directHeapEnabled &&
+            address>=DirectHeapBase &&
+            address<DirectHeapLimit) {
+
+            if(length>DirectHeapLimit-address ||
+               permissions!=(Read|Write))
+                return Fault::permission;
+
+            void* target=reinterpret_cast<void*>(address);
+
+            void* result=mmap(
+                target,length,PROT_READ|PROT_WRITE,
+                MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
+
+            if(result==MAP_FAILED)
+                return Fault::overflow;
+
+            if(result!=target){
+                munmap(result,length);
+                return Fault::permission;
+            }
+
+            try {
+                directHeapMappings.emplace(address,length);
+
+                for(uint64_t i=0;i<count;++i)
+                    pages.emplace(
+                        first+i,Page{permissions,nullptr});
+
+            } catch(...) {
+                for(uint64_t i=0;i<count;++i)
+                    pages.erase(first+i);
+
+                directHeapMappings.erase(address);
+                munmap(result,length);
+                return Fault::overflow;
+            }
+
+            return Fault::none;
+        }
+
         if (permissions & Execute) ++codeEpoch;
         for (uint64_t i = 0; i < count; ++i) {
             pages.emplace(first + i, Page{permissions, nullptr});
@@ -245,6 +312,24 @@ public:
 
     Fault unmap(uint64_t address, uint64_t length) {
         if (!length || address % PageSize || length % PageSize || length > UINT64_MAX-address) return Fault::overflow;
+
+        if(isDirectHeap(address)){
+            auto it=directHeapMappings.find(address);
+
+            if(it==directHeapMappings.end() ||
+               it->second!=length)
+                return Fault::permission;
+
+            if(munmap(reinterpret_cast<void*>(address),
+                      length)!=0)
+                return Fault::permission;
+
+            for(uint64_t i=0;i<length;i+=PageSize)
+                pages.erase((address+i)/PageSize);
+
+            directHeapMappings.erase(it);
+            return Fault::none;
+        }
 
         if(overlapsReservation(address,length))
             return Fault::permission;
@@ -317,6 +402,10 @@ public:
         if(length/PageSize>65536 || overlapsSparse(address,length)) return Fault::permission;
         for(uint64_t i=0;i<length;i+=PageSize)
             if(!pages.contains((address+i)/PageSize)) return Fault::unmapped;
+        for(uint64_t i=0;i<length;i+=PageSize)
+            if(isDirectHeap(address+i))
+                return Fault::permission;
+
         old=pages.at(address/PageSize).permissions;
         for(uint64_t i=0;i<length;i+=PageSize) {
             auto& page=pages.at((address+i)/PageSize);
@@ -338,6 +427,21 @@ public:
         if (externalContains &&
             externalContains(address))
             return externalRead(address, output);
+
+        if(isDirectHeap(address)){
+            auto it=directHeapMappings.upper_bound(address);
+            --it;
+
+            if(output.size()>it->second-(address-it->first))
+                return Fault::unmapped;
+
+            if(!output.empty())
+                std::memcpy(output.data(),
+                    reinterpret_cast<const void*>(address),
+                    output.size());
+
+            return Fault::none;
+        }
 
         // V80 J3: ordinary single-page read fast path.
         if(!output.empty() &&
@@ -402,6 +506,21 @@ public:
         if (externalContains &&
             externalContains(address))
             return externalWrite(address, input);
+
+        if(isDirectHeap(address)){
+            auto it=directHeapMappings.upper_bound(address);
+            --it;
+
+            if(input.size()>it->second-(address-it->first))
+                return Fault::unmapped;
+
+            if(!input.empty())
+                std::memcpy(
+                    reinterpret_cast<void*>(address),
+                    input.data(),input.size());
+
+            return Fault::none;
+        }
 
         // V80 J3: ordinary single-page write fast path.
         if(!input.empty() &&
@@ -470,6 +589,9 @@ public:
     // then copies bytes without requiring guest write access.
     Fault initialize(uint64_t address,
                      std::span<const uint8_t> input) {
+        if(isDirectHeap(address))
+            return write(address,input);
+
         if (input.size() > UINT64_MAX - address)
             return Fault::overflow;
 
@@ -523,6 +645,17 @@ public:
     }
 
 private:
+    bool directHeapEnabled=false;
+    std::map<uint64_t,uint64_t> directHeapMappings;
+
+    bool isDirectHeap(uint64_t a) const {
+        auto it=directHeapMappings.upper_bound(a);
+        if(it==directHeapMappings.begin())
+            return false;
+        --it;
+        return a-it->first<it->second;
+    }
+
     uint64_t codeEpoch=0;
     struct Page {
         uint8_t permissions;

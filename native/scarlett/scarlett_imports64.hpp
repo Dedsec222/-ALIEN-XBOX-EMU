@@ -1822,6 +1822,19 @@ private:
 
     mutable uint64_t virtualNext=0x510000000000ULL;
 
+    
+public:
+    bool enableNativeHeap() {
+        if(used || !blocks.empty() || !recycled.empty())
+            return false;
+
+        next=GuestMemory64::DirectHeapBase;
+        heapLimit=GuestMemory64::DirectHeapLimit;
+        return true;
+    }
+
+private:
+    mutable uint64_t heapLimit=0x730000000000ull;
     mutable uint64_t next=0x720000000000ull, used=0;
     mutable std::unordered_map<uint64_t,std::pair<uint64_t,uint64_t>> blocks;
     mutable std::multimap<uint64_t,uint64_t> recycled;
@@ -1834,7 +1847,7 @@ private:
             auto a=reuse->second;recycled.erase(reuse);
             if(m.map(a,span,GuestMemory64::Read|GuestMemory64::Write)==GuestMemory64::Fault::none){used+=span;blocks.emplace(a,std::pair{size,span});return a;}
         }
-        if(next>0x730000000000ull-span)return 0;
+        if(next>heapLimit-span)return 0;
         auto a=next;if(m.map(a,span,GuestMemory64::Read|GuestMemory64::Write)!=GuestMemory64::Fault::none)return 0;
         next+=span;used+=span;blocks.emplace(a,std::pair{size,span});return a;
     }

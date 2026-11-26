@@ -1,3 +1,4 @@
+#include "shared_runtime_memory.hpp"
 #include "scarlett_dispatch.hpp"
 #include "scarlett_memory_adapter.hpp"
 #include <exception>
@@ -102,20 +103,24 @@ int main() {
     // int3
 
     const uint8_t guest[] = {
-        0x48, 0x83, 0xEC, 0x28,
+        0x48, 0x83, 0xEC, 0x48,
         0xFF, 0x15, 0xF6, 0x00, 0x00, 0x00,
         0x48, 0x89, 0xC3,
         0xFF, 0x15, 0xF5, 0x00, 0x00, 0x00,
         0x48, 0x01, 0xC3,
         0xFF, 0x15, 0xF4, 0x00, 0x00, 0x00,
         0x48, 0x01, 0xD8,
-        0x48, 0x83, 0xC4, 0x28,
+        0x48, 0x83, 0xC4, 0x48,
         0xCC
     };
 
     memcpy(code, guest, sizeof(guest));
 
     alien::ScarlettDispatch runtime;
+    runtime.stackBase =
+        reinterpret_cast<uint64_t>(stack);
+    runtime.stackSize = page;
+
 
     if (!runtime.initialize()) {
         puts("Scarlett initialization failed");
@@ -203,7 +208,155 @@ int main() {
             return std::nullopt;
         });
 
-    alien::connectPeMemory(runtime.memory, loader);
+    
+    alien::connectRuntimeMemory(
+        runtime.memory, loader,
+        reinterpret_cast<uint64_t>(stack), page,
+        reinterpret_cast<uint64_t>(teb), page);
+
+    using Fault = genesis::GuestMemory64::Fault;
+
+    const uint64_t stackAddress =
+        reinterpret_cast<uint64_t>(stack);
+
+    const uint64_t tebTestAddress =
+        reinterpret_cast<uint64_t>(teb) + 0x100;
+
+    std::array<uint8_t,8> pattern{
+        0x88,0x77,0x66,0x55,
+        0x44,0x33,0x22,0x11
+    };
+
+    for (uint64_t address :
+            {stackAddress, tebTestAddress}) {
+
+        if (runtime.memory.write(address,pattern)
+                != Fault::none)
+            return 1;
+
+        uint64_t actual = 0;
+
+        memcpy(&actual,
+               reinterpret_cast<void*>(address),8);
+
+        if (actual != 0x1122334455667788ULL)
+            return 1;
+
+        actual = 0x8877665544332211ULL;
+
+        memcpy(reinterpret_cast<void*>(address),
+               &actual,8);
+
+        std::array<uint8_t,8> output{};
+
+        if (runtime.memory.read(address,output)
+                != Fault::none ||
+            output[0] != 0x11 ||
+            output[7] != 0x88)
+            return 1;
+
+        if (runtime.memory.check(address,1,4)
+                != Fault::permission)
+            return 1;
+
+        memset(reinterpret_cast<void*>(address),0,8);
+    }
+
+    puts("SHARED STACK MEMORY PASSED");
+    puts("SHARED TEB MEMORY PASSED");
+
+    {
+        const char* heapDll =
+            "api-ms-win-crt-heap-l1-1-0.dll";
+
+        auto mallocStub=runtime.bind(heapDll,"malloc");
+        auto callocStub=runtime.bind(heapDll,"calloc");
+        auto reallocStub=runtime.bind(heapDll,"realloc");
+        auto freeStub=runtime.bind(heapDll,"free");
+
+        if(!mallocStub || !callocStub ||
+           !reallocStub || !freeStub)
+            return 1;
+
+        uint64_t ptr=0;
+
+        if(!runtime.imports.dispatch(
+            mallocStub,runtime.memory,4096,ptr))
+            return 1;
+
+        if(!ptr ||
+           ptr<genesis::GuestMemory64::DirectHeapBase ||
+           ptr>=genesis::GuestMemory64::DirectHeapLimit)
+            return 1;
+
+        const uint64_t magic=0x1122334455667788ULL;
+
+        memcpy(reinterpret_cast<void*>(ptr),&magic,8);
+
+        std::array<uint8_t,8> bytes{};
+
+        if(runtime.memory.read(ptr,bytes)!=Fault::none)
+            return 1;
+
+        uint64_t actual=0;
+        memcpy(&actual,bytes.data(),8);
+
+        if(actual!=magic)
+            return 1;
+
+        puts("NATIVE MALLOC SHARED ACCESS PASSED");
+
+        uint64_t resized=0;
+
+        if(!runtime.imports.dispatch(
+            reallocStub,runtime.memory,
+            ptr,resized,8192) || !resized)
+            return 1;
+
+        actual=0;
+        memcpy(&actual,
+            reinterpret_cast<const void*>(resized),8);
+
+        if(actual!=magic)
+            return 1;
+
+        puts("NATIVE REALLOC PRESERVATION PASSED");
+
+        uint64_t zero=0;
+
+        if(!runtime.imports.dispatch(
+            callocStub,runtime.memory,16,zero,32)
+            || !zero)
+            return 1;
+
+        for(unsigned i=0;i<512;++i)
+            if(reinterpret_cast<const uint8_t*>(zero)[i])
+                return 1;
+
+        puts("NATIVE CALLOC ZEROING PASSED");
+
+        uint64_t ignored=0;
+
+        if(!runtime.imports.dispatch(
+            freeStub,runtime.memory,resized,ignored))
+            return 1;
+
+        if(!runtime.imports.dispatch(
+            freeStub,runtime.memory,zero,ignored))
+            return 1;
+
+        if(runtime.memory.directHeapCount()!=0)
+            return 1;
+
+        if(runtime.memory.check(
+            resized,1,genesis::GuestMemory64::Read)
+            !=Fault::unmapped)
+            return 1;
+
+        puts("NATIVE FREE AND CLEANUP PASSED");
+    }
+
+
 
     printf("PE imports resolved: %zu\n",
            size_t(loader.imports().resolved));
