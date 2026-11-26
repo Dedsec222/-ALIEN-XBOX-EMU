@@ -308,13 +308,36 @@ int main() {
     // Callback 1:
     // Read GS:[0x58], dereference TLS vector,
     // write DLL_PROCESS_ATTACH reason to TLS+8.
-    const uint8_t cb1[]={
-        0x65,0x48,0x8B,0x04,0x25,
+
+    uint8_t cb1[]={
+        // sub rsp,0x48
+        0x48,0x83,0xEC,0x48,
+
+        // call qword ptr [rip+disp32]
+        0xFF,0x15,0x00,0x00,0x00,0x00,
+
+        // add rsp,0x48
+        0x48,0x83,0xC4,0x48,
+
+        // mov rdx,gs:[0x58]
+        0x65,0x48,0x8B,0x14,0x25,
         0x58,0x00,0x00,0x00,
-        0x48,0x8B,0x00,
-        0x48,0x89,0x50,0x08,
+
+        // mov rdx,[rdx]
+        0x48,0x8B,0x12,
+
+        // mov [rdx+8],rax
+        0x48,0x89,0x42,0x08,
+
+        // ret
         0xC3
     };
+
+    const int32_t callbackDisp=
+        int32_t(page*2)-int32_t(callback1+10);
+
+    memcpy(cb1+6,&callbackDisp,4);
+
 
     // Callback 2:
     // Read callback 1's value, increment it,
@@ -1174,6 +1197,36 @@ int main() {
 
     
     
+    alien::HLEBridge bridge;
+
+    bridge.stackBase =
+        reinterpret_cast<uint64_t>(stack);
+    bridge.stackSize = page;
+    bridge.codeBase = CodeBase;
+    bridge.codeSize = page;
+
+
+    uint64_t expected[3]{};
+
+    // Obtain reference results from Scarlett itself.
+    for (unsigned i = 0; i < 3; ++i) {
+        if (!runtime.imports.dispatch(
+                bindings[i], runtime.memory,
+                0, expected[i])) {
+            puts("Reference dispatch failed");
+            return 1;
+        }
+
+        bridge.bind(
+            thunkBase + 0x200 + i * 16,
+            names[i],
+            [&, i](Frame& frame) -> uint64_t {
+                return runtime.invoke(
+                    bindings[i], frame);
+            });
+    }
+
+
     std::array<uint64_t,16> savedGprs{};
 
     for(size_t i=0;i<16;++i)
@@ -1224,7 +1277,7 @@ int main() {
 
         const uint64_t callbackRsp=
             (reinterpret_cast<uint64_t>(
-                stack+page)-64)&~15ULL;
+                stack+page)-128)&~15ULL;
 
         // Windows x64 function entry: RSP % 16 == 8.
         const uint64_t entryRsp=callbackRsp-8;
@@ -1244,18 +1297,44 @@ int main() {
         SavedFrame=nullptr;
         UnexpectedSyscall=false;
 
-        if(setjmp(ExitPoint)==0){
-            ctx->ExecuteThread(thread);
+
+        bool callbackCompleted=false;
+
+        for(unsigned dispatchCount=0;
+            dispatchCount<64;++dispatchCount){
+
+            SavedFrame=nullptr;
+
+            if(setjmp(ExitPoint)==0){
+                ctx->ExecuteThread(thread);
+            }
+
+            if(!SavedFrame || UnexpectedSyscall)
+                break;
+
+            if(SavedFrame->SynchronousFaultData.Signal
+                !=FEXCore::Core::FAULT_SIGTRAP)
+                break;
+
+            if(SavedFrame->State.rip==returnTrap+1){
+                callbackCompleted=
+                    SavedFrame->State.gregs[4]
+                    ==entryRsp+8;
+                break;
+            }
+
+            if(!bridge.dispatch(*SavedFrame)){
+                printf("Unhandled callback trap: 0x%llx\n",
+                    (unsigned long long)
+                    SavedFrame->State.rip);
+                break;
+            }
+
+            SavedFrame->State.callret_sp=callretTop;
         }
 
-        if(!SavedFrame ||
-           UnexpectedSyscall ||
-           SavedFrame->SynchronousFaultData.Signal
-               !=FEXCore::Core::FAULT_SIGTRAP ||
-           SavedFrame->State.rip!=returnTrap+1 ||
-           SavedFrame->State.gregs[4]!=entryRsp+8){
-
-            puts("STATIC TLS CALLBACK EXECUTION FAILED");
+        if(!callbackCompleted){
+            puts("TLS CALLBACK DISPATCH FAILED");
             return 1;
         }
 
@@ -1276,13 +1355,32 @@ int main() {
     memcpy(&firstResult,callbackResults.data(),8);
     memcpy(&secondResult,callbackResults.data()+8,8);
 
-    if(firstResult!=1 || secondResult!=2){
+    
+    if(firstResult!=expected[0] ||
+       secondResult!=expected[0]+1 ||
+       bridge.calls!=1 ||
+       runtime.calls!=1){
+
         puts("TLS CALLBACK ORDER VALIDATION FAILED");
         return 1;
     }
 
     puts("FEX STATIC TLS DEREFERENCE PASSED");
     puts("TLS CALLBACK EXECUTION ORDER PASSED");
+
+    puts("FEX TLS CALLBACK TO HLE PASSED");
+
+    printf("Callback API result: %llu\n",
+        (unsigned long long)firstResult);
+
+    printf("Second callback result: %llu\n",
+        (unsigned long long)secondResult);
+
+    const uint64_t callbackHleCalls=bridge.calls;
+    const uint64_t callbackRuntimeCalls=runtime.calls;
+
+    bridge.codeSize=sizeof(guest);
+
 
     // Restore original entry-point state.
     restoreGuestState();
@@ -1298,35 +1396,6 @@ int main() {
 
     if (setjmp(ExitPoint) == 0) {
         ctx->ExecuteThread(thread);
-    }
-
-    alien::HLEBridge bridge;
-
-    bridge.stackBase =
-        reinterpret_cast<uint64_t>(stack);
-    bridge.stackSize = page;
-    bridge.codeBase = CodeBase;
-    bridge.codeSize = sizeof(guest);
-
-
-    uint64_t expected[3]{};
-
-    // Obtain reference results from Scarlett itself.
-    for (unsigned i = 0; i < 3; ++i) {
-        if (!runtime.imports.dispatch(
-                bindings[i], runtime.memory,
-                0, expected[i])) {
-            puts("Reference dispatch failed");
-            return 1;
-        }
-
-        bridge.bind(
-            thunkBase + 0x200 + i * 16,
-            names[i],
-            [&, i](Frame& frame) -> uint64_t {
-                return runtime.invoke(
-                    bindings[i], frame);
-            });
     }
 
     const uint64_t expectedRax =
@@ -1352,7 +1421,10 @@ int main() {
             passed =
                 result.gregs[0] == expectedRax &&
                 result.gregs[4] == initial.gregs[4] &&
-                bridge.calls == 3 && runtime.calls == 3 &&
+                
+    bridge.calls == callbackHleCalls+3 &&
+    runtime.calls == callbackRuntimeCalls+3 &&
+
                 SavedFrame->SynchronousFaultData.Signal ==
                     FEXCore::Core::FAULT_SIGTRAP;
 
