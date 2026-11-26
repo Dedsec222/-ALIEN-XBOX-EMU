@@ -1,3 +1,6 @@
+#include "scarlett_dispatch.hpp"
+#include "scarlett_memory_adapter.hpp"
+#include <exception>
 #include "hle_bridge.hpp"
 #include <FEXCore/Config/Config.h>
 #include <FEXCore/Core/Context.h>
@@ -25,6 +28,7 @@ static std::jmp_buf ExitPoint;
 static Frame* SavedFrame = nullptr;
 static bool UnexpectedSyscall = false;
 
+static uint64_t HLECodeBase = 0;
 static uint64_t CodeBase = 0;
 static uint64_t CodeSize = 0;
 
@@ -47,9 +51,12 @@ public:
         Thread*, uint64_t address) override {
 
         if (address >= CodeBase &&
-            address - CodeBase < CodeSize) {
+            address - CodeBase < CodeSize)
             return {CodeBase, CodeSize, false};
-        }
+
+        if (address >= HLECodeBase &&
+            address - HLECodeBase < CodeSize)
+            return {HLECodeBase, CodeSize, false};
 
         return {};
     }
@@ -107,17 +114,106 @@ int main() {
     };
 
     memcpy(code, guest, sizeof(guest));
-    // Synthetic IAT slots.
-    for (unsigned i = 0; i < 3; ++i) {
-        const uint64_t target =
-            CodeBase + 0x200 + i * 16;
 
-        memcpy(code + 0x100 + i * 8,
-               &target, sizeof(target));
+    alien::ScarlettDispatch runtime;
+
+    if (!runtime.initialize()) {
+        puts("Scarlett initialization failed");
+        return 1;
+    }
+
+    const char* dll =
+        "api-ms-win-core-processthreads-l1-1-0.dll";
+
+    const char* names[] = {
+        "GetCurrentProcessId",
+        "GetCurrentThreadId",
+        "GetCurrentProcess"
+    };
+
+    uint64_t bindings[3]{};
+
+    for (unsigned i = 0; i < 3; ++i) {
+        bindings[i] = runtime.bind(dll, names[i]);
+
+        if (!bindings[i]) {
+            printf("Unresolved: %s\n", names[i]);
+            return 1;
+        }
 
         code[0x200 + i * 16] = 0xCC;
     }
 
+    alien::Pe64Image pe;
+
+    pe.image_base = 0x180000000ULL;
+    pe.image_size = page * 3;
+    pe.header_size = page;
+    pe.entry_rva = page;
+    pe.image.resize(pe.image_size);
+
+    pe.sections.push_back({
+        ".text", uint32_t(page),
+        uint32_t(page), 0, 0, 0x60000000u
+    });
+
+    pe.sections.push_back({
+        ".idata", uint32_t(page * 2),
+        uint32_t(page), 0, 0, 0xc0000000u
+    });
+
+    // Copy guest instructions into the PE image.
+    memcpy(pe.image.data() + page,
+           guest, sizeof(guest));
+
+    // Rewrite RIP-relative CALL displacements.
+    const unsigned callOffsets[] = {4,13,22};
+
+    for (unsigned i = 0; i < 3; ++i) {
+        const uint32_t slot = page * 2 + i * 8;
+
+        const int32_t displacement =
+            int32_t(slot) -
+            int32_t(page + callOffsets[i] + 6);
+
+        memcpy(pe.image.data() + page +
+               callOffsets[i] + 2,
+               &displacement, 4);
+
+        pe.imports.push_back({
+            dll, names[i], 0, false, slot
+        });
+    }
+
+    const uint64_t thunkBase = CodeBase;
+    HLECodeBase = thunkBase;
+
+    alien::DirectPeLoader loader;
+
+    loader.load(std::move(pe), 0,
+        [&](const alien::PeImport& imp)
+            -> std::optional<uint64_t> {
+
+            for (unsigned i = 0; i < 3; ++i) {
+                if (imp.module == dll &&
+                    imp.symbol == names[i])
+                    return thunkBase + 0x200 + i * 16;
+            }
+
+            return std::nullopt;
+        });
+
+    alien::connectPeMemory(runtime.memory, loader);
+
+    printf("PE imports resolved: %zu\n",
+           size_t(loader.imports().resolved));
+
+    if (loader.imports().resolved != 3 ||
+        !loader.imports().unresolved.empty())
+        return 1;
+
+    CodeBase = loader.entry();
+    CodeSize = page;
 
     const uint64_t tebAddress =
         reinterpret_cast<uint64_t>(teb);
@@ -278,23 +374,29 @@ int main() {
     bridge.codeBase = CodeBase;
     bridge.codeSize = sizeof(guest);
 
-    bridge.bind(CodeBase + 0x200,
-        "GetCurrentProcessId",
-        [&](Frame&) -> uint64_t {
-            return bridge.guestProcessId;
-        });
 
-    bridge.bind(CodeBase + 0x210,
-        "GetCurrentThreadId",
-        [&](Frame&) -> uint64_t {
-            return bridge.guestThreadId;
-        });
+    uint64_t expected[3]{};
 
-    bridge.bind(CodeBase + 0x220,
-        "GetCurrentProcess",
-        [](Frame&) -> uint64_t {
-            return UINT64_MAX;
-        });
+    // Obtain reference results from Scarlett itself.
+    for (unsigned i = 0; i < 3; ++i) {
+        if (!runtime.imports.dispatch(
+                bindings[i], runtime.memory,
+                0, expected[i])) {
+            puts("Reference dispatch failed");
+            return 1;
+        }
+
+        bridge.bind(
+            thunkBase + 0x200 + i * 16,
+            names[i],
+            [&, i](Frame& frame) -> uint64_t {
+                return runtime.invoke(
+                    bindings[i], frame);
+            });
+    }
+
+    const uint64_t expectedRax =
+        expected[0] + expected[1] + expected[2];
 
     bool passed = false;
 
@@ -314,9 +416,9 @@ int main() {
                 (unsigned long long)bridge.calls);
 
             passed =
-                result.gregs[0] == 2000 &&
+                result.gregs[0] == expectedRax &&
                 result.gregs[4] == initial.gregs[4] &&
-                bridge.calls == 3 &&
+                bridge.calls == 3 && runtime.calls == 3 &&
                 SavedFrame->SynchronousFaultData.Signal ==
                     FEXCore::Core::FAULT_SIGTRAP;
 
@@ -324,7 +426,17 @@ int main() {
         }
 
         if (!bridge.dispatch(*SavedFrame)) {
+            
+            printf("Trap RIP: 0x%llx\n",
+                (unsigned long long)SavedFrame->State.rip);
+            printf("Trap signal: %u\n",
+                unsigned(SavedFrame->SynchronousFaultData.Signal));
+            printf("PE entry: 0x%llx\n",
+                (unsigned long long)CodeBase);
+            printf("Thunk base: 0x%llx\n",
+                (unsigned long long)HLECodeBase);
             puts("UNHANDLED GUEST TRAP");
+
             break;
         }
 
@@ -346,7 +458,7 @@ int main() {
     munmap(memory, page * 3);
 
     puts(passed
-        ? "FEXCORE MULTI-IMPORT IAT TEST PASSED"
+        ? "FEXCORE SCARLETT PE EXECUTION PASSED"
         : "FEXCORE GUEST EXECUTION FAILED");
 
     return passed ? 0 : 1;
