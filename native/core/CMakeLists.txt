@@ -27,3 +27,24 @@ target_compile_options(
     -Wpedantic
 )
 
+
+add_executable(
+    direct_memory_test
+    direct_memory_test.cpp
+)
+
+target_link_libraries(
+    direct_memory_test PRIVATE alien_core
+)
+
+target_compile_options(
+    direct_memory_test PRIVATE
+    -Wall -Wextra -Wpedantic
+)
+
+enable_testing()
+
+add_test(
+    NAME direct_guest_memory
+    COMMAND direct_memory_test
+)
