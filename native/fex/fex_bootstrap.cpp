@@ -77,7 +77,7 @@ int main() {
     const size_t page = sysconf(_SC_PAGESIZE);
 
     auto* memory = static_cast<uint8_t*>(
-        mmap(nullptr, page * 3,
+        mmap(nullptr, page * 4,
              PROT_READ | PROT_WRITE,
              MAP_PRIVATE | MAP_ANONYMOUS,
              -1, 0));
@@ -89,7 +89,7 @@ int main() {
 
     auto* code = memory;
     auto* teb = memory + page;
-    auto* stack = memory + page * 2;
+    auto* stack = memory + page * 3;
 
     CodeBase = reinterpret_cast<uint64_t>(code);
     CodeSize = page;
@@ -150,6 +150,32 @@ int main() {
 
     // mov dword ptr [r10], 0x12345678
     0x41,0xC7,0x02,0x78,0x56,0x34,0x12,
+
+    
+    // mov rbx, gs:[0x30]
+    0x65,0x48,0x8B,0x1C,0x25,
+    0x30,0x00,0x00,0x00,
+
+    // mov rsi, gs:[0x40]
+    0x65,0x48,0x8B,0x34,0x25,
+    0x40,0x00,0x00,0x00,
+
+    // mov rdi, gs:[0x48]
+    0x65,0x48,0x8B,0x3C,0x25,
+    0x48,0x00,0x00,0x00,
+
+    // mov r10, gs:[0x08]
+    0x65,0x4C,0x8B,0x14,0x25,
+    0x08,0x00,0x00,0x00,
+
+    // mov r11, gs:[0x10]
+    0x65,0x4C,0x8B,0x1C,0x25,
+    0x10,0x00,0x00,0x00,
+
+    // mov qword ptr gs:[0x1480], 0x12345678
+    0x65,0x48,0xC7,0x04,0x25,
+    0x80,0x14,0x00,0x00,
+    0x78,0x56,0x34,0x12,
 
     0xCC
     };
@@ -252,7 +278,7 @@ int main() {
     alien::connectRuntimeMemory(
         runtime.memory, loader,
         reinterpret_cast<uint64_t>(stack), page,
-        reinterpret_cast<uint64_t>(teb), page);
+        reinterpret_cast<uint64_t>(teb), page * 2);
 
     using Fault = genesis::GuestMemory64::Fault;
 
@@ -523,7 +549,37 @@ int main() {
     const uint64_t tebAddress =
         reinterpret_cast<uint64_t>(teb);
 
-    memcpy(teb + 0x30, &tebAddress, 8);
+    
+    auto tebPut64=[&](size_t offset,uint64_t value){
+        memcpy(teb+offset,&value,8);
+    };
+
+    auto tebPut32=[&](size_t offset,uint32_t value){
+        memcpy(teb+offset,&value,4);
+    };
+
+    tebPut64(0x00,UINT64_MAX);
+    tebPut64(0x08,
+        reinterpret_cast<uint64_t>(stack+page));
+    tebPut64(0x10,
+        reinterpret_cast<uint64_t>(stack));
+
+    tebPut64(0x30,tebAddress);
+
+    // CLIENT_ID
+    tebPut64(0x40,1000);
+    tebPut64(0x48,1);
+
+    // LastErrorValue
+    tebPut32(0x68,0);
+
+    // Initial TLS slots.
+    memset(teb+0x1480,0,64*8);
+
+    runtime.imports.selectThread(1,tebAddress);
+
+    puts("EXPANDED NATIVE TEB INITIALIZED");
+
 
     if (mprotect(code, page, PROT_READ) != 0) {
         perror("mprotect");
@@ -920,7 +976,61 @@ int main() {
         passed=passed && argcOK && argvOK && writeOK;
     }
 
+    
+    if(passed && SavedFrame){
+        const auto& regs=SavedFrame->State.gregs;
+
+        const bool selfOK=
+            regs[3]==tebAddress;
+
+        const bool processOK=
+            regs[6]==1000;
+
+        const bool threadOK=
+            regs[7]==1;
+
+        const bool stackOK=
+            regs[10]==reinterpret_cast<uint64_t>(
+                stack+page) &&
+            regs[11]==reinterpret_cast<uint64_t>(
+                stack);
+
+        std::array<uint8_t,8> tlsResult{};
+
+        const bool tlsRead=
+            runtime.memory.read(
+                tebAddress+0x1480,tlsResult)
+            ==genesis::GuestMemory64::Fault::none;
+
+        uint64_t tlsValue=0;
+        memcpy(&tlsValue,tlsResult.data(),8);
+
+        const bool tlsOK=
+            tlsRead && tlsValue==0x12345678;
+
+        puts(selfOK?
+            "FEX GS TEB SELF POINTER PASSED":
+            "FEX GS TEB SELF POINTER FAILED");
+
+        puts(processOK && threadOK?
+            "FEX GS CLIENT ID PASSED":
+            "FEX GS CLIENT ID FAILED");
+
+        puts(stackOK?
+            "FEX GS STACK LIMITS PASSED":
+            "FEX GS STACK LIMITS FAILED");
+
+        puts(tlsOK?
+            "FEX GS EXPANDED TLS SLOT PASSED":
+            "FEX GS EXPANDED TLS SLOT FAILED");
+
+        passed=passed && selfOK &&
+            processOK && threadOK &&
+            stackOK && tlsOK;
+    }
+
     ctx->DestroyThread(thread);
+
 
     const bool crtClean=
         runtime.memory.unmap(
@@ -985,7 +1095,7 @@ int main() {
 
     FEXCore::Config::Shutdown();
 
-    munmap(memory, page * 3);
+    munmap(memory, page * 4);
 
     puts(passed
         ? "FEXCORE SCARLETT PE EXECUTION PASSED"
