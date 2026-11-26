@@ -578,6 +578,83 @@ int main() {
 
     runtime.imports.selectThread(1,tebAddress);
 
+
+    constexpr uint64_t tlsNative=0x1FFFFF0000ULL;
+
+    if(runtime.memory.reserve(tlsNative,8192)
+        !=genesis::GuestMemory64::Fault::none)
+        return 1;
+
+    if(runtime.memory.commit(tlsNative,8192,3)
+        !=genesis::GuestMemory64::Fault::none)
+        return 1;
+
+    tebPut64(0x1780,tlsNative);
+
+    runtime.imports.enableNativeTls();
+
+    const char* tlsDll=
+        "api-ms-win-core-processthreads-l1-1-0.dll";
+
+    const auto tlsAlloc=runtime.bind(tlsDll,"TlsAlloc");
+    const auto tlsFree=runtime.bind(tlsDll,"TlsFree");
+    const auto tlsGet=runtime.bind(tlsDll,"TlsGetValue");
+    const auto tlsSet=runtime.bind(tlsDll,"TlsSetValue");
+
+    if(!tlsAlloc || !tlsFree || !tlsGet || !tlsSet)
+        return 1;
+
+    auto tlsCall=[&](uint64_t api,uint64_t a,
+                     uint64_t b,uint64_t& result){
+        return runtime.imports.dispatch(
+            api,runtime.memory,a,result,b);
+    };
+
+    uint64_t tlsResult=0;
+
+    for(uint32_t i=0;i<1088;++i){
+        if(!tlsCall(tlsAlloc,0,0,tlsResult)
+           || tlsResult!=i)
+            return 1;
+
+        if(!tlsCall(tlsSet,i,0xA1100000ULL+i,tlsResult)
+           || tlsResult!=1)
+            return 1;
+    }
+
+    puts("ALL 1088 NATIVE TLS INDICES ALLOCATED");
+
+    if(!tlsCall(tlsAlloc,0,0,tlsResult)
+       || tlsResult!=UINT32_MAX)
+        return 1;
+
+    puts("TLS EXHAUSTION HANDLING PASSED");
+
+    for(uint32_t i=0;i<1088;++i){
+        if(!tlsCall(tlsGet,i,0,tlsResult)
+           || tlsResult!=0xA1100000ULL+i)
+            return 1;
+    }
+
+    puts("ALL NATIVE TLS VALUES VERIFIED");
+
+    for(uint32_t i=0;i<1088;++i){
+        if(!tlsCall(tlsFree,i,0,tlsResult)
+           || tlsResult!=1)
+            return 1;
+    }
+
+    if(!tlsCall(tlsAlloc,0,0,tlsResult)
+       || tlsResult!=0)
+        return 1;
+
+    if(!tlsCall(tlsGet,0,0,tlsResult)
+       || tlsResult!=0)
+        return 1;
+
+    puts("TLS SLOT REUSE AND ZEROING PASSED");
+
+
     puts("EXPANDED NATIVE TEB INITIALIZED");
 
 
@@ -1028,6 +1105,35 @@ int main() {
             processOK && threadOK &&
             stackOK && tlsOK;
     }
+
+    
+    uint64_t tlsFinal=0;
+
+    const bool tlsGuestOK=
+        tlsCall(tlsGet,0,0,tlsFinal) &&
+        tlsFinal==0x12345678;
+
+    puts(tlsGuestOK?
+        "FEX TO SCARLETT TLS COHERENCE PASSED":
+        "FEX TO SCARLETT TLS COHERENCE FAILED");
+
+    passed=passed && tlsGuestOK;
+
+    const bool tlsFreeOK=
+        tlsCall(tlsFree,0,0,tlsFinal) &&
+        tlsFinal==1;
+
+    const bool tlsCleanup=
+        runtime.memory.releaseReservation(tlsNative)
+        ==genesis::GuestMemory64::Fault::none;
+
+    tebPut64(0x1780,0);
+
+    passed=passed && tlsFreeOK && tlsCleanup;
+
+    puts(tlsCleanup?
+        "NATIVE TLS EXPANSION CLEANUP PASSED":
+        "NATIVE TLS EXPANSION CLEANUP FAILED");
 
     ctx->DestroyThread(thread);
 

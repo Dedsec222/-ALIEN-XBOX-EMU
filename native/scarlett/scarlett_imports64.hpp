@@ -40,6 +40,45 @@ public:
 
     uint64_t CrtBase=LegacyCrtBase;
 
+    
+    bool nativeTlsEnabled=false;
+
+    void enableNativeTls() {
+        nativeTlsEnabled=true;
+    }
+
+    bool nativeTlsAddress(
+        GuestMemory64& memory,
+        uint32_t slot,
+        uint64_t& address) const {
+
+        if(!activeTeb || slot>=1088)
+            return false;
+
+        if(slot<64){
+            address=activeTeb+0x1480+slot*8;
+        }else{
+            std::array<uint8_t,8> bytes{};
+
+            if(memory.read(activeTeb+0x1780,bytes)
+                !=GuestMemory64::Fault::none)
+                return false;
+
+            uint64_t expansion=0;
+            memcpy(&expansion,bytes.data(),8);
+
+            if(!expansion ||
+               expansion>UINT64_MAX-(slot-64)*8)
+                return false;
+
+            address=expansion+(slot-64)*8;
+        }
+
+        return memory.check(address,8,
+            GuestMemory64::Read|GuestMemory64::Write)
+            ==GuestMemory64::Fault::none;
+    }
+
     void enableNativeCrt() {
         CrtBase=NativeCrtBase;
     }
@@ -1314,6 +1353,81 @@ public:
             if(n=="FlsSetValue"){values[slot]=rdx;rax=1;return true;}
             auto it=values.find(slot);lastError=0;rax=it==values.end()?0:it->second;return true;
         }
+        
+        if(nativeTlsEnabled &&
+           (n=="TlsAlloc" || n=="TlsFree" ||
+            n=="TlsGetValue" || n=="TlsSetValue")){
+
+            auto store=[&](uint64_t a,uint64_t v){
+                std::array<uint8_t,8> b{};
+                memcpy(b.data(),&v,8);
+                return memory.write(a,b)==F::none;
+            };
+
+            if(n=="TlsAlloc"){
+                for(uint32_t i=0;i<1088;++i){
+                    if(tlsValues.contains(i))
+                        continue;
+
+                    uint64_t a=0;
+
+                    if(!nativeTlsAddress(memory,i,a)
+                       || !store(a,0))
+                        return false;
+
+                    tlsValues.emplace(i,0);
+                    rax=i;
+                    return true;
+                }
+
+                lastError=8;
+                rax=UINT32_MAX;
+                return true;
+            }
+
+            const uint32_t slot=uint32_t(rcx);
+
+            if(!tlsValues.contains(slot)){
+                lastError=87;
+                rax=0;
+                return true;
+            }
+
+            uint64_t a=0;
+            if(!nativeTlsAddress(memory,slot,a))
+                return false;
+
+            if(n=="TlsFree"){
+                if(!store(a,0))
+                    return false;
+
+                tlsValues.erase(slot);
+
+                for(auto& item:threadLocals)
+                    item.second.values.erase(slot);
+
+                rax=1;
+                return true;
+            }
+
+            if(n=="TlsSetValue"){
+                if(!store(a,rdx))
+                    return false;
+
+                rax=1;
+                return true;
+            }
+
+            std::array<uint8_t,8> b{};
+
+            if(memory.read(a,b)!=F::none)
+                return false;
+
+            memcpy(&rax,b.data(),8);
+            lastError=0;
+            return true;
+        }
+
         if(n=="TlsAlloc"){
             for(uint32_t i=0;i<1088;++i){
                 if(!tlsValues.contains(i)){
