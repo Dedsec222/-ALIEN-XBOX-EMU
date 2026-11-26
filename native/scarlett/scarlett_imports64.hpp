@@ -1526,7 +1526,7 @@ public:
                 span=(rdx+4095)&~4095ULL;
                 reserve=true;
 
-                constexpr uint64_t limit=0x600000000000ULL;
+                const uint64_t limit=virtualLimit;
                 if(virtualNext>limit-65535){
                     lastError=8;return true;
                 }
@@ -1820,6 +1820,20 @@ private:
     mutable std::unordered_map<uint32_t,uint64_t> tlsValues,flsSlots;
     const uint64_t pointerCookie=uint64_t(std::chrono::steady_clock::now().time_since_epoch().count()) ^ 0x9e3779b97f4a7c15ULL;
 
+    
+public:
+    bool enableNativeVirtual() {
+        if(!lifecycleBlocks.empty() ||
+           !virtualBlocks.empty())
+            return false;
+
+        virtualNext=GuestMemory64::DirectVirtualBase;
+        virtualLimit=GuestMemory64::DirectVirtualLimit;
+        return true;
+    }
+
+private:
+    uint64_t virtualLimit=0x600000000000ULL;
     mutable uint64_t virtualNext=0x510000000000ULL;
 
     

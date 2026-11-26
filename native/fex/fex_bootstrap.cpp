@@ -354,6 +354,118 @@ int main() {
             return 1;
 
         puts("NATIVE FREE AND CLEANUP PASSED");
+
+        const char* vmDll=
+            "api-ms-win-core-memory-l1-1-0.dll";
+
+        auto alloc=runtime.bind(vmDll,"VirtualAlloc");
+        auto release=runtime.bind(vmDll,"VirtualFree");
+        auto protect=runtime.bind(vmDll,"VirtualProtect");
+
+        if(!alloc || !release || !protect)
+            return 1;
+
+        uint64_t base=0;
+
+        if(!runtime.imports.dispatch(
+            alloc,runtime.memory,
+            0,base,65536,0x2000,4) || !base)
+            return 1;
+
+        if(runtime.memory.check(base,1,1)
+            !=Fault::unmapped)
+            return 1;
+
+        puts("NATIVE VIRTUAL RESERVE PASSED");
+
+        uint64_t result=0;
+
+        if(!runtime.imports.dispatch(
+            alloc,runtime.memory,
+            base,result,8192,0x1000,4)
+            || result!=base)
+            return 1;
+
+        const uint64_t vmMagic=0x123456789abcdef0ULL;
+
+        memcpy(reinterpret_cast<void*>(base),
+               &vmMagic,8);
+
+        std::array<uint8_t,8> vmBytes{};
+
+        if(runtime.memory.read(base,vmBytes)
+            !=Fault::none)
+            return 1;
+
+        uint64_t vmActual=0;
+        memcpy(&vmActual,vmBytes.data(),8);
+
+        if(vmActual!=vmMagic)
+            return 1;
+
+        puts("NATIVE VIRTUAL COMMIT PASSED");
+
+        uint64_t oldPtr=
+            reinterpret_cast<uint64_t>(stack)+0x100;
+
+        if(!runtime.imports.dispatch(
+            protect,runtime.memory,
+            base,result,4096,2,oldPtr)
+            || result!=1)
+            return 1;
+
+        uint32_t oldProtection=0;
+
+        memcpy(&oldProtection,
+            reinterpret_cast<const void*>(oldPtr),4);
+
+        if(oldProtection!=4 ||
+           runtime.memory.write(base,vmBytes)
+               !=Fault::permission)
+            return 1;
+
+        puts("NATIVE VIRTUAL PROTECT PASSED");
+
+        if(!runtime.imports.dispatch(
+            release,runtime.memory,
+            base,result,8192,0x4000)
+            || result!=1)
+            return 1;
+
+        if(runtime.memory.check(base,1,1)
+            !=Fault::unmapped)
+            return 1;
+
+        puts("NATIVE VIRTUAL DECOMMIT PASSED");
+
+        if(!runtime.imports.dispatch(
+            alloc,runtime.memory,
+            base,result,8192,0x1000,4)
+            || result!=base)
+            return 1;
+
+        vmActual=1;
+
+        memcpy(&vmActual,
+            reinterpret_cast<const void*>(base),8);
+
+        if(vmActual!=0)
+            return 1;
+
+        puts("NATIVE VIRTUAL RECOMMIT ZEROING PASSED");
+
+        if(!runtime.imports.dispatch(
+            release,runtime.memory,
+            base,result,0,0x8000)
+            || result!=1)
+            return 1;
+
+        if(runtime.memory.nativeReservationCount()!=0 ||
+           runtime.memory.reservationCommittedPages()!=0)
+            return 1;
+
+        puts("NATIVE VIRTUAL RELEASE PASSED");
+
     }
 
 

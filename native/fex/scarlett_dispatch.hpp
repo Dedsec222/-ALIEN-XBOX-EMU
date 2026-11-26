@@ -25,7 +25,15 @@ public:
         if(!imports.enableNativeHeap())
             return false;
 
+        
+        if(!memory.enableDirectVirtual())
+            return false;
+
+        if(!imports.enableNativeVirtual())
+            return false;
+
         return imports.install(memory);
+
 
     }
 

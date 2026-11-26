@@ -33,7 +33,29 @@ public:
         return true;
     }
 
+    static constexpr uint64_t DirectVirtualBase =
+        0x1000000000ULL;
+
+    static constexpr uint64_t DirectVirtualLimit =
+        0x2000000000ULL;
+
+    bool enableDirectVirtual() {
+        if(sysconf(_SC_PAGESIZE)!=PageSize ||
+           !reservations.empty())
+            return false;
+
+        directVirtualEnabled=true;
+        return true;
+    }
+
+    size_t nativeReservationCount() const {
+        return nativeReservations.size();
+    }
+
     ~GuestMemory64() {
+        for(const auto& [a,n]:nativeReservations)
+            munmap(reinterpret_cast<void*>(a),n);
+
         for (const auto& [a,n] : directHeapMappings)
             munmap(reinterpret_cast<void*>(a),n);
     }
@@ -138,6 +160,38 @@ public:
                entry.first<(a+n)/PageSize)
                 return Fault::permission;
 
+        if(directVirtualEnabled){
+            if(a<DirectVirtualBase ||
+               a>=DirectVirtualLimit ||
+               n>DirectVirtualLimit-a)
+                return Fault::permission;
+
+            void* target=reinterpret_cast<void*>(a);
+            void* result=mmap(
+                target,n,PROT_NONE,
+                MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
+
+            if(result==MAP_FAILED)
+                return Fault::overflow;
+
+            if(result!=target){
+                munmap(result,n);
+                return Fault::permission;
+            }
+
+            try {
+                nativeReservations.emplace(a,n);
+                reservations.emplace(a,n);
+            } catch(...) {
+                nativeReservations.erase(a);
+                reservations.erase(a);
+                munmap(result,n);
+                return Fault::overflow;
+            }
+
+            return Fault::none;
+        }
+
         reservations.emplace(a,n);
         return Fault::none;
     }
@@ -172,6 +226,27 @@ public:
         } catch(const std::bad_alloc&) {
             return Fault::overflow;
         }
+        if(isNativeVirtual(a)){
+            for(uint64_t i=0;i<n;i+=PageSize){
+                const auto number=(a+i)/PageSize;
+                if(!pending.contains(number))
+                    continue;
+
+                if(mprotect(
+                    reinterpret_cast<void*>(a+i),
+                    PageSize,nativeProtection(perm))!=0){
+
+                    for(uint64_t j=0;j<i;j+=PageSize)
+                        if(pending.contains((a+j)/PageSize))
+                            mprotect(
+                                reinterpret_cast<void*>(a+j),
+                                PageSize,PROT_NONE);
+
+                    return Fault::permission;
+                }
+            }
+        }
+
         pages.merge(pending);
         reservationCommitted+=needed;
         if(needed && (perm&Execute))++codeEpoch;
@@ -184,6 +259,16 @@ public:
 
         if(!reservedRange(a,n))
             return Fault::unmapped;
+
+        if(isNativeVirtual(a)){
+            void* ptr=reinterpret_cast<void*>(a);
+
+            if(madvise(ptr,n,MADV_DONTNEED)!=0)
+                return Fault::permission;
+
+            if(mprotect(ptr,n,PROT_NONE)!=0)
+                return Fault::permission;
+        }
 
         for(auto it=pages.begin();it!=pages.end();){
             if(it->first>=a/PageSize &&
@@ -205,6 +290,16 @@ public:
 
         auto result=decommit(a,it->second);
         if(result!=Fault::none)return result;
+
+        auto native=nativeReservations.find(a);
+
+        if(native!=nativeReservations.end()){
+            if(munmap(reinterpret_cast<void*>(a),
+                      native->second)!=0)
+                return Fault::permission;
+
+            nativeReservations.erase(native);
+        }
 
         reservations.erase(it);
         return Fault::none;
@@ -407,6 +502,16 @@ public:
                 return Fault::permission;
 
         old=pages.at(address/PageSize).permissions;
+
+        if(isNativeVirtual(address)){
+            if(!reservedRange(address,length))
+                return Fault::permission;
+
+            if(mprotect(
+                reinterpret_cast<void*>(address),
+                length,nativeProtection(permissions))!=0)
+                return Fault::permission;
+        }
         for(uint64_t i=0;i<length;i+=PageSize) {
             auto& page=pages.at((address+i)/PageSize);
             if((page.permissions^permissions)&Execute) ++codeEpoch;
@@ -418,6 +523,11 @@ public:
     bool fetchByte(uint64_t address, uint8_t& value) const {
         const auto page = pages.find(address/PageSize);
         if (page == pages.end() || !(page->second.permissions & Execute)) return false;
+        if(isNativeVirtual(address)){
+            value=*reinterpret_cast<const uint8_t*>(address);
+            return true;
+        }
+
         value = page->second.data ? (*page->second.data)[address%PageSize] : 0;
         return true;
     }
@@ -439,6 +549,22 @@ public:
                 std::memcpy(output.data(),
                     reinterpret_cast<const void*>(address),
                     output.size());
+
+            return Fault::none;
+        }
+
+        if(isNativeVirtual(address)){
+            if(output.empty())return Fault::none;
+
+            if(!reservedRange(address,output.size()))
+                return Fault::unmapped;
+
+            auto fault=check(address,output.size(),Read);
+            if(fault!=Fault::none)return fault;
+
+            std::memcpy(output.data(),
+                reinterpret_cast<const void*>(address),
+                output.size());
 
             return Fault::none;
         }
@@ -522,6 +648,27 @@ public:
             return Fault::none;
         }
 
+        if(isNativeVirtual(address)){
+            if(input.empty())return Fault::none;
+
+            if(!reservedRange(address,input.size()))
+                return Fault::unmapped;
+
+            auto fault=check(address,input.size(),Write);
+            if(fault!=Fault::none)return fault;
+
+            std::memcpy(
+                reinterpret_cast<void*>(address),
+                input.data(),input.size());
+
+            for(uint64_t p=address/PageSize;
+                p<=(address+input.size()-1)/PageSize;++p)
+                if(pages.at(p).permissions&Execute)
+                    ++codeEpoch;
+
+            return Fault::none;
+        }
+
         // V80 J3: ordinary single-page write fast path.
         if(!input.empty() &&
            input.size()<=UINT64_MAX-address &&
@@ -589,7 +736,8 @@ public:
     // then copies bytes without requiring guest write access.
     Fault initialize(uint64_t address,
                      std::span<const uint8_t> input) {
-        if(isDirectHeap(address))
+        if(isDirectHeap(address) ||
+           isNativeVirtual(address))
             return write(address,input);
 
         if (input.size() > UINT64_MAX - address)
@@ -646,6 +794,25 @@ public:
 
 private:
     bool directHeapEnabled=false;
+    bool directVirtualEnabled=false;
+
+    std::map<uint64_t,uint64_t> nativeReservations;
+
+    bool isNativeVirtual(uint64_t a) const {
+        auto it=nativeReservations.upper_bound(a);
+        if(it==nativeReservations.begin())
+            return false;
+        --it;
+        return a-it->first<it->second;
+    }
+
+    static int nativeProtection(uint8_t perm) {
+        int prot=PROT_NONE;
+        if(perm&(Read|Execute)) prot|=PROT_READ;
+        if(perm&Write) prot|=PROT_WRITE;
+        return prot;
+    }
+
     std::map<uint64_t,uint64_t> directHeapMappings;
 
     bool isDirectHeap(uint64_t a) const {
