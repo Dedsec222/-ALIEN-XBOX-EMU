@@ -32,7 +32,14 @@ public:
         if(!imports.enableNativeVirtual())
             return false;
 
+        
+        if(!memory.enableDirectSparse())
+            return false;
+
+        imports.enableNativeXboxMemory();
+
         return imports.install(memory);
+
 
 
     }

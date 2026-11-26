@@ -978,7 +978,7 @@ public:
             if(!xboxConfigured || rcx || !(reserve||commit||extra)) {
                 std::fprintf(stderr,"XBOX_EXPERIMENT rejected size=%llx flags=%llx protection=%llx arg5=%llx\n",(unsigned long long)rdx,(unsigned long long)r8,(unsigned long long)r9,(unsigned long long)arg5);return true;
             }
-            if(xboxNext>0x810000000000ULL-rdx)return true;
+            if(xboxNext>xboxLimit-rdx)return true;
             if(memory.mapSparse(xboxNext,rdx,GuestMemory64::Read|GuestMemory64::Write)!=F::none)return true;
             rax=xboxNext;xboxNext+=rdx;
             std::fprintf(stderr,"XBOX_EXPERIMENT sparse base=%llx size=%llx flags=%llx arg5=%x\n",(unsigned long long)rax,(unsigned long long)rdx,(unsigned long long)r8,uint32_t(arg5));return true;
@@ -1775,6 +1775,15 @@ private:
     mutable std::unordered_map<std::string,uint64_t> handlers;
     mutable uint64_t tokenNext=0;
     mutable bool xboxConfigured=false;
+    
+public:
+    void enableNativeXboxMemory() {
+        xboxNext=GuestMemory64::DirectSparseBase;
+        xboxLimit=GuestMemory64::DirectSparseLimit;
+    }
+
+private:
+    uint64_t xboxLimit=0x810000000000ULL;
     mutable uint64_t xboxNext=0x800000000000ULL;
     static std::string normalize(std::string s){for(auto& c:s)if(c>='A'&&c<='Z')c=char(c-'A'+'a');return s;}
     uint64_t imageBase=0;

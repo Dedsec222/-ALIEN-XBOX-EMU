@@ -124,6 +124,13 @@ int main() {
     // mov [r12+8], r11
     0x4D,0x89,0x5C,0x24,0x08,
 
+    
+    // mov r10, [r14]
+    0x4D,0x8B,0x16,
+
+    // mov [r15], r10
+    0x4D,0x89,0x17,
+
     0xCC
     };
 
@@ -584,7 +591,34 @@ int main() {
     printf("Guest virtual memory: 0x%llx\n",
         (unsigned long long)guestVirtual);
 
+    
+    constexpr uint64_t sparseBase=
+        genesis::GuestMemory64::DirectSparseBase;
+
+    constexpr uint64_t sparseSize=16ULL<<30;
+
+    constexpr uint64_t sparseEnd=
+        sparseBase+sparseSize-4096;
+
+    if(runtime.memory.mapSparse(
+        sparseBase,sparseSize,3)
+        !=genesis::GuestMemory64::Fault::none)
+        return 1;
+
+    std::array<uint8_t,8> sparseSeed{};
+    memcpy(sparseSeed.data(),&guestMagic,8);
+
+    if(runtime.memory.write(
+        sparseBase,sparseSeed)
+        !=genesis::GuestMemory64::Fault::none)
+        return 1;
+
+    puts("16 GIB NATIVE SPARSE MAPPING PASSED");
+
     FEXCore::Core::CPUState initial{};
+    initial.gregs[14]=sparseBase;
+    initial.gregs[15]=sparseEnd;
+
     initial.gregs[12]=guestHeap;
     initial.gregs[13]=guestVirtual;
 
@@ -808,7 +842,44 @@ int main() {
         passed=passed && heapOK && virtualOK;
     }
 
+    
+    if(passed){
+        std::array<uint8_t,8> sparseResult{};
+
+        const bool readOK=
+            runtime.memory.read(
+                sparseEnd,sparseResult)
+            ==genesis::GuestMemory64::Fault::none;
+
+        uint64_t sparseValue=0;
+
+        memcpy(&sparseValue,
+            sparseResult.data(),8);
+
+        const bool sparseOK=
+            readOK && sparseValue==guestMagic;
+
+        puts(sparseOK?
+            "FEX TRANSLATED SPARSE ACCESS PASSED":
+            "FEX TRANSLATED SPARSE ACCESS FAILED");
+
+        passed=passed && sparseOK;
+    }
+
     ctx->DestroyThread(thread);
+
+    const bool sparseClean=
+        runtime.memory.unmap(
+            sparseBase,sparseSize)
+        ==genesis::GuestMemory64::Fault::none
+        && runtime.memory.nativeSparseCount()==0;
+
+    puts(sparseClean?
+        "NATIVE SPARSE CLEANUP PASSED":
+        "NATIVE SPARSE CLEANUP FAILED");
+
+    passed=passed && sparseClean;
+
 
     {
         uint64_t result=0;

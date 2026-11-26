@@ -52,7 +52,29 @@ public:
         return nativeReservations.size();
     }
 
+    static constexpr uint64_t DirectSparseBase =
+        0x2000000000ULL;
+
+    static constexpr uint64_t DirectSparseLimit =
+        0x4000000000ULL;
+
+    bool enableDirectSparse() {
+        if(sysconf(_SC_PAGESIZE)!=PageSize ||
+           !sparse.empty())
+            return false;
+
+        directSparseEnabled=true;
+        return true;
+    }
+
+    size_t nativeSparseCount() const {
+        return nativeSparse.size();
+    }
+
     ~GuestMemory64() {
+        for(const auto& [a,n]:nativeSparse)
+            munmap(reinterpret_cast<void*>(a),n);
+
         for(const auto& [a,n]:nativeReservations)
             munmap(reinterpret_cast<void*>(a),n);
 
@@ -400,6 +422,42 @@ public:
         for (const auto& entry : pages)
             if (entry.first >= address/PageSize && entry.first < (address+length)/PageSize)
                 return Fault::permission;
+        if(directSparseEnabled){
+            if(address<DirectSparseBase ||
+               address>=DirectSparseLimit ||
+               length>DirectSparseLimit-address)
+                return Fault::permission;
+
+            void* target=
+                reinterpret_cast<void*>(address);
+
+            void* result=mmap(
+                target,length,
+                PROT_READ|PROT_WRITE,
+                MAP_PRIVATE|MAP_ANONYMOUS,
+                -1,0);
+
+            if(result==MAP_FAILED)
+                return Fault::overflow;
+
+            if(result!=target){
+                munmap(result,length);
+                return Fault::permission;
+            }
+
+            try {
+                nativeSparse.emplace(address,length);
+                sparse.emplace(address,length);
+            } catch(...) {
+                nativeSparse.erase(address);
+                sparse.erase(address);
+                munmap(result,length);
+                return Fault::overflow;
+            }
+
+            return Fault::none;
+        }
+
         sparse.emplace(address, length);
         return Fault::none;
     }
@@ -428,6 +486,24 @@ public:
 
         if(overlapsReservation(address,length))
             return Fault::permission;
+        if(isNativeSparse(address)){
+            auto it=nativeSparse.find(address);
+
+            if(it==nativeSparse.end() ||
+               it->second!=length)
+                return Fault::permission;
+
+            if(munmap(
+                reinterpret_cast<void*>(address),
+                length)!=0)
+                return Fault::permission;
+
+            nativeSparse.erase(it);
+            sparse.erase(address);
+
+            return Fault::none;
+        }
+
         auto region = sparse.find(address);
         if (region != sparse.end() && region->second == length) {
             for (auto it=sparseData.begin(); it!=sparseData.end();) {
@@ -569,6 +645,19 @@ public:
             return Fault::none;
         }
 
+        if(isNativeSparse(address)){
+            if(!nativeSparseContains(
+                address,output.size()))
+                return Fault::unmapped;
+
+            if(!output.empty())
+                std::memcpy(output.data(),
+                    reinterpret_cast<const void*>(address),
+                    output.size());
+
+            return Fault::none;
+        }
+
         // V80 J3: ordinary single-page read fast path.
         if(!output.empty() &&
            output.size()<=UINT64_MAX-address &&
@@ -665,6 +754,19 @@ public:
                 p<=(address+input.size()-1)/PageSize;++p)
                 if(pages.at(p).permissions&Execute)
                     ++codeEpoch;
+
+            return Fault::none;
+        }
+
+        if(isNativeSparse(address)){
+            if(!nativeSparseContains(
+                address,input.size()))
+                return Fault::unmapped;
+
+            if(!input.empty())
+                std::memcpy(
+                    reinterpret_cast<void*>(address),
+                    input.data(),input.size());
 
             return Fault::none;
         }
@@ -794,6 +896,33 @@ public:
 
 private:
     bool directHeapEnabled=false;
+    bool directSparseEnabled=false;
+
+    std::map<uint64_t,uint64_t> nativeSparse;
+
+    bool isNativeSparse(uint64_t a) const {
+        auto it=nativeSparse.upper_bound(a);
+        if(it==nativeSparse.begin())
+            return false;
+        --it;
+        return a-it->first<it->second;
+    }
+
+    bool nativeSparseContains(
+        uint64_t a,uint64_t n) const {
+
+        auto it=nativeSparse.upper_bound(a);
+        if(it==nativeSparse.begin())
+            return false;
+
+        --it;
+
+        const auto offset=a-it->first;
+
+        return offset<it->second &&
+               n<=it->second-offset;
+    }
+
     bool directVirtualEnabled=false;
 
     std::map<uint64_t,uint64_t> nativeReservations;
