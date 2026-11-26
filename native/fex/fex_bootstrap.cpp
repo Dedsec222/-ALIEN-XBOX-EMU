@@ -96,14 +96,28 @@ int main() {
 
     const uint8_t guest[] = {
         0x48, 0x83, 0xEC, 0x28,
-        0xE8, 0x06, 0x00, 0x00, 0x00,
+        0xFF, 0x15, 0xF6, 0x00, 0x00, 0x00,
+        0x48, 0x89, 0xC3,
+        0xFF, 0x15, 0xF5, 0x00, 0x00, 0x00,
+        0x48, 0x01, 0xC3,
+        0xFF, 0x15, 0xF4, 0x00, 0x00, 0x00,
+        0x48, 0x01, 0xD8,
         0x48, 0x83, 0xC4, 0x28,
-        0xCC,
-        0x90,
         0xCC
     };
 
     memcpy(code, guest, sizeof(guest));
+    // Synthetic IAT slots.
+    for (unsigned i = 0; i < 3; ++i) {
+        const uint64_t target =
+            CodeBase + 0x200 + i * 16;
+
+        memcpy(code + 0x100 + i * 8,
+               &target, sizeof(target));
+
+        code[0x200 + i * 16] = 0xCC;
+    }
+
 
     const uint64_t tebAddress =
         reinterpret_cast<uint64_t>(teb);
@@ -240,7 +254,7 @@ int main() {
 
     state.callret_sp = callretTop;
 
-    printf("CALLRET stack initialized: %zu bytes\\n",
+    printf("CALLRET stack initialized: %zu bytes\n",
            callretSize);
 
     puts("64-bit guest GDT initialized");
@@ -258,50 +272,67 @@ int main() {
 
     alien::HLEBridge bridge;
 
-    bridge.thunkAddress = CodeBase + 15;
     bridge.stackBase =
         reinterpret_cast<uint64_t>(stack);
     bridge.stackSize = page;
+    bridge.codeBase = CodeBase;
+    bridge.codeSize = sizeof(guest);
+
+    bridge.bind(CodeBase + 0x200,
+        "GetCurrentProcessId",
+        [&](Frame&) -> uint64_t {
+            return bridge.guestProcessId;
+        });
+
+    bridge.bind(CodeBase + 0x210,
+        "GetCurrentThreadId",
+        [&](Frame&) -> uint64_t {
+            return bridge.guestThreadId;
+        });
+
+    bridge.bind(CodeBase + 0x220,
+        "GetCurrentProcess",
+        [](Frame&) -> uint64_t {
+            return UINT64_MAX;
+        });
 
     bool passed = false;
 
-    if (SavedFrame &&
-        !UnexpectedSyscall &&
-        SavedFrame->SynchronousFaultData.Signal ==
-            FEXCore::Core::FAULT_SIGTRAP &&
-        SavedFrame->State.rip == CodeBase + 16 &&
-        bridge.dispatch(*SavedFrame)) {
+    for (unsigned i = 0; i < 4; ++i) {
+        if (!SavedFrame || UnexpectedSyscall)
+            break;
 
+        if (SavedFrame->State.rip ==
+                CodeBase + sizeof(guest)) {
 
-        // Discard cached CALL/RET entries before
-        // resuming after a host-emulated return.
-        SavedFrame->State.callret_sp = callretTop;
+            const auto& result = SavedFrame->State;
 
-        SavedFrame = nullptr;
+            printf("RAX: %llu\n",
+                (unsigned long long)result.gregs[0]);
 
-        puts("Resuming after HLE import...");
-        fflush(stdout);
-
-        if (setjmp(ExitPoint) == 0) {
-            ctx->ExecuteThread(thread);
-        }
-
-        if (SavedFrame && !UnexpectedSyscall) {
-            const auto& state = SavedFrame->State;
-
-            printf("RAX: %llu\\n",
-                (unsigned long long)state.gregs[0]);
-
-            printf("HLE calls: %llu\\n",
+            printf("HLE calls: %llu\n",
                 (unsigned long long)bridge.calls);
 
             passed =
-                state.gregs[0] == bridge.guestProcessId &&
-                state.gregs[4] == initial.gregs[4] &&
-                state.rip == CodeBase + 14 &&
-                bridge.calls == 1 &&
+                result.gregs[0] == 2000 &&
+                result.gregs[4] == initial.gregs[4] &&
+                bridge.calls == 3 &&
                 SavedFrame->SynchronousFaultData.Signal ==
                     FEXCore::Core::FAULT_SIGTRAP;
+
+            break;
+        }
+
+        if (!bridge.dispatch(*SavedFrame)) {
+            puts("UNHANDLED GUEST TRAP");
+            break;
+        }
+
+        SavedFrame->State.callret_sp = callretTop;
+        SavedFrame = nullptr;
+
+        if (setjmp(ExitPoint) == 0) {
+            ctx->ExecuteThread(thread);
         }
     }
 
@@ -315,7 +346,7 @@ int main() {
     munmap(memory, page * 3);
 
     puts(passed
-        ? "FEXCORE HLE IMPORT BRIDGE PASSED"
+        ? "FEXCORE MULTI-IMPORT IAT TEST PASSED"
         : "FEXCORE GUEST EXECUTION FAILED");
 
     return passed ? 0 : 1;
