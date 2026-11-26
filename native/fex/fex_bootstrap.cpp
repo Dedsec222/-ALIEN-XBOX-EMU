@@ -1,3 +1,7 @@
+#include <fstream>
+#include <iostream>
+#include "native_import_gateway.hpp"
+#include <vector>
 #include "static_tls.hpp"
 #include "shared_runtime_memory.hpp"
 #include "scarlett_dispatch.hpp"
@@ -34,6 +38,37 @@ static uint64_t HLECodeBase = 0;
 static uint64_t CodeBase = 0;
 static uint64_t CodeSize = 0;
 
+struct GuestExecutableRange {
+    uint64_t base;
+    uint64_t size;
+    bool writable;
+};
+
+static std::vector<GuestExecutableRange>
+    ExecutableRanges;
+
+static bool registerExecutableRange(
+    uint64_t base,uint64_t size,
+    bool writable=false){
+
+    if(!base || !size || base>UINT64_MAX-size)
+        return false;
+
+    for(const auto& r:ExecutableRanges){
+
+        if(base<r.base+r.size &&
+           r.base<base+size)
+            return false;
+    }
+
+    ExecutableRanges.push_back({
+        base,size,writable
+    });
+
+    return true;
+}
+
+
 [[noreturn]]
 static void ExceptionHandler(Context*, Frame* frame) {
     SavedFrame = frame;
@@ -51,6 +86,16 @@ public:
     FEXCore::HLE::ExecutableRangeInfo
     QueryGuestExecutableRange(
         Thread*, uint64_t address) override {
+
+
+        for(const auto& r:ExecutableRanges){
+
+            if(address>=r.base &&
+               address-r.base<r.size)
+                return {
+                    r.base,r.size,r.writable
+                };
+        }
 
         if (address >= CodeBase &&
             address - CodeBase < CodeSize)
@@ -74,7 +119,198 @@ public:
     }
 };
 
-int main() {
+
+static int probeActualPE(const char* path){
+
+    try {
+        std::ifstream file(
+            path,std::ios::binary|std::ios::ate);
+
+        if(!file)
+            throw std::runtime_error(
+                "Cannot open PE executable");
+
+        const auto length=file.tellg();
+
+        if(length<=0 ||
+           length>std::streamoff(2ULL<<30))
+            throw std::runtime_error(
+                "Invalid PE file size");
+
+        std::vector<std::byte> bytes(
+            static_cast<size_t>(length));
+
+        file.seekg(0);
+
+        if(!file.read(
+            reinterpret_cast<char*>(bytes.data()),
+            static_cast<std::streamsize>(bytes.size())))
+            throw std::runtime_error(
+                "PE file read failed");
+
+        auto pe=alien::Pe64Image::parse(bytes);
+
+        const auto sections=pe.sections;
+        const size_t importCount=pe.imports.size();
+
+        std::vector<std::byte>().swap(bytes);
+
+        alien::ScarlettDispatch runtime;
+
+        if(!runtime.initialize())
+            throw std::runtime_error(
+                "Scarlett initialization failed");
+
+        alien::NativeImportGateway gateway;
+
+        if(!gateway.initialize(importCount))
+            throw std::runtime_error(
+                "Import gateway allocation failed");
+
+        alien::DirectPeLoader loader;
+
+        loader.load(std::move(pe),0,
+            [&](const alien::PeImport& imp){
+                return gateway.bind(imp,runtime);
+            });
+
+        if(!gateway.seal())
+            throw std::runtime_error(
+                "Gateway protection failed");
+
+        ExecutableRanges.clear();
+
+        for(const auto& section:sections){
+
+            if(!section.executable())
+                continue;
+
+            const uint64_t size=
+                section.virtual_size>
+                section.raw_size ?
+                section.virtual_size:
+                section.raw_size;
+
+            if(!size)
+                continue;
+
+            const uint64_t address=
+                loader.base()+section.virtual_address;
+
+            if(!registerExecutableRange(
+                address,size,section.writable()))
+                throw std::runtime_error(
+                    "Executable range registration failed");
+
+            printf("EXEC RANGE: 0x%llx size=0x%llx\n",
+                (unsigned long long)address,
+                (unsigned long long)size);
+        }
+
+        if(!registerExecutableRange(
+            gateway.base(),gateway.size()))
+            throw std::runtime_error(
+                "Gateway range registration failed");
+
+        alien::HLEBridge bridge;
+
+        bridge.executableAddress=[](uint64_t address){
+
+            for(const auto& range:ExecutableRanges)
+                if(address>=range.base &&
+                   address-range.base<range.size)
+                    return true;
+
+            return false;
+        };
+
+        if(!gateway.install(bridge,runtime))
+            throw std::runtime_error(
+                "HLE gateway installation failed");
+
+        size_t verified=0;
+
+        for(const auto& binding:gateway.bindings){
+
+            uint64_t iat=0;
+
+            if(!loader.read(
+                loader.base()+binding.import.iat_rva,
+                &iat,sizeof(iat)))
+                throw std::runtime_error(
+                    "IAT read failed");
+
+            if(iat!=binding.thunk)
+                throw std::runtime_error(
+                    "IAT thunk mismatch");
+
+            if(*reinterpret_cast<const uint8_t*>(iat)
+                !=0xCC)
+                throw std::runtime_error(
+                    "Invalid native thunk opcode");
+
+            if(!bridge.registry.count(iat))
+                throw std::runtime_error(
+                    "Missing HLE registration");
+
+            ++verified;
+
+            if(!binding.scarlettAddress){
+
+                const auto& imp=binding.import;
+
+                const std::string symbol=
+                    imp.by_ordinal ?
+                    "#"+std::to_string(imp.ordinal):
+                    imp.symbol;
+
+                printf("[UNSUPPORTED] %s!%s\n",
+                    imp.module.c_str(),
+                    symbol.c_str());
+            }
+        }
+
+        if(verified!=importCount)
+            throw std::runtime_error(
+                "Incomplete IAT verification");
+
+        printf("\n=== ACTUAL PE IMPORT REPORT ===\n");
+        printf("Total imports: %zu\n",importCount);
+        printf("Verified IAT thunks: %zu\n",verified);
+        printf("Scarlett registered: %zu\n",
+            gateway.registeredCount());
+        printf("Unsupported imports: %zu\n",
+            gateway.unsupportedCount());
+        printf("Gateway bytes: %zu\n",gateway.size());
+        printf("Executable ranges: %zu\n",
+            ExecutableRanges.size());
+
+        puts("ACTUAL PE IMPORT GATEWAY PASSED");
+        puts("Guest execution: NOT ATTEMPTED");
+
+        ExecutableRanges.clear();
+
+        return 0;
+
+    }catch(const std::exception& e){
+
+        ExecutableRanges.clear();
+
+        fprintf(stderr,"PE integration failed: %s\n",
+            e.what());
+
+        return 1;
+    }
+}
+
+int main(int argc,char** argv) {
+
+    if(argc==2)
+        return probeActualPE(argv[1]);
+
+    if(argc!=1)
+        return 1;
+
     const size_t page = sysconf(_SC_PAGESIZE);
 
     auto* memory = static_cast<uint8_t*>(

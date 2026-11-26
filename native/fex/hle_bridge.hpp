@@ -23,6 +23,10 @@ public:
     uint64_t codeBase = 0;
     uint64_t codeSize = 0;
 
+    std::function<bool(uint64_t)>
+        executableAddress;
+
+
     uint32_t guestProcessId = 1000;
     uint32_t guestThreadId = 1001;
     uint64_t calls = 0;
@@ -74,9 +78,18 @@ public:
             reinterpret_cast<const void*>(rsp),
             sizeof(ret));
 
-        if (ret < codeBase ||
-            ret - codeBase >= codeSize)
+
+        if(executableAddress){
+
+            if(!executableAddress(ret))
+                return false;
+
+        }else if(ret<codeBase ||
+                 ret-codeBase>=codeSize){
+
             return false;
+        }
+
 
         state.gregs[0] = it->second.handler(frame);
         state.gregs[4] = rsp + 8;
