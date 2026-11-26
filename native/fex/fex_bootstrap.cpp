@@ -286,7 +286,523 @@ static int probeActualPE(const char* path){
             ExecutableRanges.size());
 
         puts("ACTUAL PE IMPORT GATEWAY PASSED");
-        puts("Guest execution: NOT ATTEMPTED");
+
+        const long hostPage=sysconf(_SC_PAGESIZE);
+
+        if(hostPage!=4096)
+            throw std::runtime_error(
+                "Unsupported host page size");
+
+        const size_t tebSize=8192;
+        const size_t stackSize=8ULL<<20;
+        const size_t mappingSize=tebSize+stackSize;
+
+        void* allocation=mmap(
+            nullptr,mappingSize,
+            PROT_READ|PROT_WRITE,
+            MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
+
+        if(allocation==MAP_FAILED)
+            throw std::runtime_error(
+                "Actual TEB/stack allocation failed");
+
+        struct MappingGuard {
+            void* address;
+            size_t size;
+            ~MappingGuard(){
+                munmap(address,size);
+            }
+        } mappingGuard{allocation,mappingSize};
+
+        const uint64_t tebAddress=
+            reinterpret_cast<uint64_t>(allocation);
+
+        const uint64_t stackAddress=
+            tebAddress+tebSize;
+
+        const uint64_t stackTop=
+            stackAddress+stackSize;
+
+        auto tebPut64=[&](size_t offset,uint64_t value){
+            memcpy(reinterpret_cast<void*>(
+                tebAddress+offset),&value,8);
+        };
+
+        auto tebPut32=[&](size_t offset,uint32_t value){
+            memcpy(reinterpret_cast<void*>(
+                tebAddress+offset),&value,4);
+        };
+
+        tebPut64(0x00,UINT64_MAX);
+        tebPut64(0x08,stackTop);
+        tebPut64(0x10,stackAddress);
+        tebPut64(0x30,tebAddress);
+        tebPut64(0x40,1000);
+        tebPut64(0x48,1);
+        tebPut32(0x68,0);
+
+        runtime.stackBase=stackAddress;
+        runtime.stackSize=stackSize;
+
+        bridge.stackBase=stackAddress;
+        bridge.stackSize=stackSize;
+
+        alien::connectRuntimeMemory(
+            runtime.memory,loader,
+            stackAddress,stackSize,
+            tebAddress,tebSize);
+
+        runtime.imports.selectThread(1,tebAddress);
+
+        if(!loader.tls())
+            throw std::runtime_error(
+                "Actual PE TLS directory missing");
+
+        alien::StaticTls staticTls;
+
+        if(!staticTls.initialize(
+            loader,runtime.memory,tebAddress))
+            throw std::runtime_error(
+                "Actual static TLS initialization failed");
+
+        const auto& tls=*loader.tls();
+
+        std::vector<uint8_t> actual(
+            tls.initial_data.size()+tls.zero_fill);
+
+        if(!actual.empty() &&
+           runtime.memory.read(
+               staticTls.block,actual)
+               !=genesis::GuestMemory64::Fault::none)
+            throw std::runtime_error(
+                "Actual TLS block read failed");
+
+        if(!tls.initial_data.empty() &&
+           memcmp(actual.data(),
+                  tls.initial_data.data(),
+                  tls.initial_data.size())!=0)
+            throw std::runtime_error(
+                "Actual TLS template mismatch");
+
+        for(size_t i=tls.initial_data.size();
+            i<actual.size();++i){
+
+            if(actual[i]!=0)
+                throw std::runtime_error(
+                    "Actual TLS zero-fill mismatch");
+        }
+
+        uint32_t index=UINT32_MAX;
+
+        if(!loader.read(
+            tls.index_address,&index,4) ||
+            index!=0)
+            throw std::runtime_error(
+                "Actual TLS index mismatch");
+
+        uint64_t vectorAddress=0;
+        uint64_t blockAddress=0;
+
+        memcpy(&vectorAddress,
+            reinterpret_cast<const void*>(
+                tebAddress+0x58),8);
+
+        if(vectorAddress!=staticTls.vectorAddress)
+            throw std::runtime_error(
+                "Actual TEB TLS vector mismatch");
+
+        memcpy(&blockAddress,
+            reinterpret_cast<const void*>(
+                vectorAddress),8);
+
+        if(blockAddress!=staticTls.block)
+            throw std::runtime_error(
+                "Actual TLS vector entry mismatch");
+
+        printf("\n=== ACTUAL THREAD ENVIRONMENT ===\n");
+
+        printf("TEB: 0x%llx\n",
+            (unsigned long long)tebAddress);
+
+        printf("Stack base: 0x%llx\n",
+            (unsigned long long)stackAddress);
+
+        printf("Stack top: 0x%llx\n",
+            (unsigned long long)stackTop);
+
+        printf("Stack bytes: %zu\n",stackSize);
+
+        printf("TLS template bytes: %zu\n",
+            tls.initial_data.size());
+
+        printf("TLS zero-fill bytes: %u\n",
+            tls.zero_fill);
+
+        printf("TLS index: %u\n",index);
+
+        printf("TLS vector: 0x%llx\n",
+            (unsigned long long)vectorAddress);
+
+        printf("TLS block: 0x%llx\n",
+            (unsigned long long)blockAddress);
+
+        printf("TLS callbacks: %zu\n",
+            staticTls.callbacks.size());
+
+        for(const uint64_t callback:
+            staticTls.callbacks){
+
+            if(!bridge.executableAddress(callback))
+                throw std::runtime_error(
+                    "TLS callback outside executable range");
+
+            printf("ACTUAL TLS CALLBACK READY: 0x%llx\n",
+                (unsigned long long)callback);
+        }
+
+        puts("ACTUAL TEB INITIALIZATION PASSED");
+        puts("ACTUAL STATIC TLS TEMPLATE PASSED");
+        puts("ACTUAL TLS VECTOR PASSED");
+        puts("ACTUAL TLS CALLBACK ADDRESSES PASSED");
+
+        const size_t page=4096;
+
+        // Dedicated callback return sentinel.
+        void* trapMapping=mmap(
+            nullptr,page,
+            PROT_READ|PROT_WRITE,
+            MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
+
+        if(trapMapping==MAP_FAILED)
+            throw std::runtime_error(
+                "Return trap allocation failed");
+
+        MappingGuard trapGuard{trapMapping,page};
+
+        memset(trapMapping,0xCC,page);
+
+        if(mprotect(trapMapping,page,PROT_READ)!=0)
+            throw std::runtime_error(
+                "Return trap protection failed");
+
+        const uint64_t returnTrap=
+            reinterpret_cast<uint64_t>(trapMapping);
+
+        if(!registerExecutableRange(returnTrap,page))
+            throw std::runtime_error(
+                "Return trap registration failed");
+
+        // Disable fallback synthetic code ranges.
+        CodeBase=0;
+        CodeSize=0;
+        HLECodeBase=0;
+
+    FEXCore::Config::Initialize();
+    FEXCore::Config::Load();
+    FEXCore::Config::ReloadMetaLayer();
+
+    FEXCore::Config::Set(
+        FEXCore::Config::CONFIG_ENABLECODECACHINGWIP, "0");
+
+    FEXCore::Config::Set(
+        FEXCore::Config::CONFIG_IS64BIT_MODE, "1");
+
+    FEXCore::HostFeatures features{};
+
+    features.ProcessFeatures.HostType =
+        FEXCore::HostFeatures::HostTypeEnum::Linux;
+
+    features.ProcessFeatures.Is64BitMode = 1;
+    features.DCacheLineLog2 = 4;
+    features.ProcessPID = getpid();
+
+    // Conservative initial host feature configuration.
+    // Advanced ARM extensions remain disabled.
+
+    FEXCore::SignalDelegator signals;
+    AlienSyscalls syscalls;
+
+    auto ctx = Context::CreateNewContext(features);
+
+    if (!ctx) {
+        puts("Context creation failed");
+        return 1;
+    }
+
+    ctx->SetSignalDelegator(&signals);
+    ctx->SetSyscallHandler(&syscalls);
+
+    if (!ctx->InitCore()) {
+        puts("FEXCore initialization failed");
+        return 1;
+    }
+
+    
+
+
+        FEXCore::Core::CPUState initial{};
+
+        initial.rip=staticTls.callbacks.front();
+        initial.gs_cached=tebAddress;
+        initial.gregs[4]=(stackTop-128)&~15ULL;
+
+        auto* thread=ctx->CreateThread(&initial);
+
+        if(!thread || !thread->CurrentFrame)
+            throw std::runtime_error(
+                "Actual guest thread creation failed");
+
+    using CPUState = FEXCore::Core::CPUState;
+
+    static CPUState::gdt_segment gdt[32]{};
+    static CPUState::gdt_segment ldt[8192]{};
+
+    auto& cs = gdt[CPUState::DEFAULT_USER_CS];
+
+    cs.L = 1;
+    cs.D = 0;
+    cs.P = 1;
+    cs.S = 1;
+    cs.DPL = 3;
+    cs.Type = 0xB;
+    cs.G = 1;
+
+    CPUState::SetGDTBase(&cs, 0);
+    CPUState::SetGDTLimit(&cs, 0xFFFFF);
+
+    auto& state = thread->CurrentFrame->State;
+
+    state.segment_arrays[
+        CPUState::SEGMENT_ARRAY_INDEX_GDT] = gdt;
+
+    state.segment_arrays[
+        CPUState::SEGMENT_ARRAY_INDEX_LDT] = ldt;
+
+    state.cs_idx = CPUState::DEFAULT_USER_CS << 3;
+
+    state.gs_cached = tebAddress;
+
+
+    const size_t callretSize =
+        Thread::CALLRET_STACK_SIZE;
+
+    const size_t callretMappingSize =
+        callretSize + page * 2;
+
+    auto* callretMapping = static_cast<uint8_t*>(
+        mmap(nullptr, callretMappingSize,
+             PROT_NONE,
+             MAP_PRIVATE | MAP_ANONYMOUS,
+             -1, 0));
+
+    if (callretMapping == MAP_FAILED) {
+        perror("CALLRET mmap");
+        return 1;
+    }
+
+    auto* callretBase = callretMapping + page;
+
+    if (mprotect(callretBase, callretSize,
+                 PROT_READ | PROT_WRITE) != 0) {
+        perror("CALLRET mprotect");
+        munmap(callretMapping, callretMappingSize);
+        return 1;
+    }
+
+    thread->CallRetStackBase = callretBase;
+
+    const uint64_t callretTop =
+        reinterpret_cast<uint64_t>(
+            callretBase + callretSize - 16);
+
+    state.callret_sp = callretTop;
+
+    printf("CALLRET stack initialized: %zu bytes\n",
+           callretSize);
+
+    puts("64-bit guest GDT initialized");
+
+    thread->CurrentFrame->Pointers
+        .SynchronousExceptionHandler =
+        reinterpret_cast<uintptr_t>(&ExceptionHandler);
+
+    
+    
+
+
+        size_t completedCallbacks=0;
+        bool executionFailed=false;
+
+        for(const uint64_t callback:
+            staticTls.callbacks){
+
+            printf("\nEXECUTING ACTUAL TLS CALLBACK: "
+                   "0x%llx\n",
+                (unsigned long long)callback);
+
+            const uint64_t entryRsp=
+                ((stackTop-128)&~15ULL)-8;
+
+            memset(reinterpret_cast<void*>(entryRsp),
+                0,128);
+
+            memcpy(reinterpret_cast<void*>(entryRsp),
+                &returnTrap,8);
+
+            state.rip=callback;
+
+            state.gregs[1]=loader.base();
+            state.gregs[2]=1;
+            state.gregs[8]=0;
+            state.gregs[9]=0;
+            state.gregs[4]=entryRsp;
+
+            state.gs_cached=tebAddress;
+            state.callret_sp=callretTop;
+
+            thread->CurrentFrame
+                ->SynchronousFaultData={};
+
+            UnexpectedSyscall=false;
+
+            bool completed=false;
+
+            for(unsigned iteration=0;
+                iteration<4096;++iteration){
+
+                SavedFrame=nullptr;
+
+                fflush(stdout);
+
+                if(setjmp(ExitPoint)==0){
+                    ctx->ExecuteThread(thread);
+                }
+
+                if(!SavedFrame){
+
+                    puts("FEX returned without guest frame");
+                    break;
+                }
+
+                auto& frame=*SavedFrame;
+
+                if(UnexpectedSyscall){
+
+                    printf("UNEXPECTED GUEST SYSCALL "
+                           "RIP=0x%llx\n",
+                        (unsigned long long)
+                        frame.State.rip);
+
+                    break;
+                }
+
+                if(frame.SynchronousFaultData.Signal
+                    !=FEXCore::Core::FAULT_SIGTRAP){
+
+                    printf("GUEST EXCEPTION: "
+                           "signal=%u RIP=0x%llx\n",
+                        unsigned(frame.SynchronousFaultData
+                            .Signal),
+                        (unsigned long long)
+                        frame.State.rip);
+
+                    break;
+                }
+
+                if(frame.State.rip==returnTrap+1){
+
+                    completed=
+                        frame.State.gregs[4]==entryRsp+8;
+
+                    if(!completed)
+                        puts("CALLBACK STACK MISMATCH");
+
+                    break;
+                }
+
+                try {
+
+                    if(!bridge.dispatch(frame)){
+
+                        printf("UNHANDLED GUEST TRAP: "
+                               "RIP=0x%llx\n",
+                            (unsigned long long)
+                            frame.State.rip);
+
+                        break;
+                    }
+
+                }catch(const std::exception& e){
+
+                    fprintf(stderr,
+                        "GUEST IMPORT FAILURE: %s\n",
+                        e.what());
+
+                    break;
+                }
+
+                frame.State.callret_sp=callretTop;
+            }
+
+            if(!completed){
+
+                puts("ACTUAL TLS CALLBACK STOPPED");
+                executionFailed=true;
+                break;
+            }
+
+            ++completedCallbacks;
+
+            printf("ACTUAL TLS CALLBACK COMPLETED: "
+                   "0x%llx\n",
+                (unsigned long long)callback);
+        }
+
+        printf("\n=== ACTUAL FEX EXECUTION REPORT ===\n");
+
+        printf("Completed callbacks: %zu/%zu\n",
+            completedCallbacks,
+            staticTls.callbacks.size());
+
+        printf("HLE calls: %llu\n",
+            (unsigned long long)bridge.calls);
+
+        printf("Final guest RIP: 0x%llx\n",
+            (unsigned long long)state.rip);
+
+        printf("Final guest RAX: 0x%llx\n",
+            (unsigned long long)state.gregs[0]);
+
+        ctx->DestroyThread(thread);
+
+        munmap(callretMapping,callretMappingSize);
+
+        ctx.reset();
+
+        FEXCore::Config::Shutdown();
+
+        if(executionFailed)
+            puts("ACTUAL FEX TLS EXECUTION INCOMPLETE");
+        else
+            puts("ACTUAL FEX TLS EXECUTION PASSED");
+
+
+
+        if(!staticTls.cleanup(
+            runtime.memory,tebAddress))
+            throw std::runtime_error(
+                "Actual static TLS cleanup failed");
+
+        puts("ACTUAL STATIC TLS CLEANUP PASSED");
+
+
+        puts("PE entry-point execution: NOT ATTEMPTED");
+
+        if(executionFailed){
+            ExecutableRanges.clear();
+            return 2;
+        }
+
 
         ExecutableRanges.clear();
 
