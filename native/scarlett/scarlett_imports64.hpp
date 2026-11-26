@@ -43,6 +43,42 @@ public:
     
     bool nativeTlsEnabled=false;
 
+    
+    bool syncLastErrorFromTeb(
+        GuestMemory64& memory) const {
+
+        if(!nativeTlsEnabled)
+            return true;
+
+        if(!activeTeb)
+            return false;
+
+        std::array<uint8_t,4> bytes{};
+
+        if(memory.read(activeTeb+0x68,bytes)
+            !=GuestMemory64::Fault::none)
+            return false;
+
+        memcpy(&lastError,bytes.data(),4);
+        return true;
+    }
+
+    bool syncLastErrorToTeb(
+        GuestMemory64& memory) const {
+
+        if(!nativeTlsEnabled)
+            return true;
+
+        if(!activeTeb)
+            return false;
+
+        std::array<uint8_t,4> bytes{};
+        memcpy(bytes.data(),&lastError,4);
+
+        return memory.write(activeTeb+0x68,bytes)
+            ==GuestMemory64::Fault::none;
+    }
+
     void enableNativeTls() {
         nativeTlsEnabled=true;
     }

@@ -177,6 +177,16 @@ int main() {
     0x80,0x14,0x00,0x00,
     0x78,0x56,0x34,0x12,
 
+    
+    // mov r9d, gs:[0x68]
+    0x65,0x44,0x8B,0x0C,0x25,
+    0x68,0x00,0x00,0x00,
+
+    // mov dword ptr gs:[0x68], 0x5678
+    0x65,0xC7,0x04,0x25,
+    0x68,0x00,0x00,0x00,
+    0x78,0x56,0x00,0x00,
+
     0xCC
     };
 
@@ -654,6 +664,72 @@ int main() {
 
     puts("TLS SLOT REUSE AND ZEROING PASSED");
 
+    const char* errorDll=
+        "api-ms-win-core-errorhandling-l1-1-0.dll";
+
+    const auto errorSet=
+        runtime.bind(errorDll,"SetLastError");
+
+    const auto errorGet=
+        runtime.bind(errorDll,"GetLastError");
+
+    if(!errorSet || !errorGet)
+        return 1;
+
+    auto errorCall=[&](uint64_t api,uint64_t arg,
+                       uint64_t& result){
+        return runtime.imports.syncLastErrorFromTeb(
+                   runtime.memory) &&
+               runtime.imports.dispatch(
+                   api,runtime.memory,arg,result) &&
+               runtime.imports.syncLastErrorToTeb(
+                   runtime.memory);
+    };
+
+    uint64_t errorResult=0;
+    uint32_t nativeError=0;
+
+    if(!errorCall(errorSet,0x1234,errorResult))
+        return 1;
+
+    memcpy(&nativeError,teb+0x68,4);
+
+    if(nativeError!=0x1234)
+        return 1;
+
+    puts("SETLASTERROR TO NATIVE TEB PASSED");
+
+    if(!errorCall(errorGet,0,errorResult)
+       || errorResult!=0x1234)
+        return 1;
+
+    puts("GETLASTERROR PRESERVATION PASSED");
+
+    if(!errorCall(tlsGet,9999,errorResult)
+       || errorResult!=0)
+        return 1;
+
+    memcpy(&nativeError,teb+0x68,4);
+
+    if(nativeError!=87)
+        return 1;
+
+    puts("TLS FAILURE LASTERROR PROPAGATION PASSED");
+
+    if(!errorCall(tlsGet,0,errorResult))
+        return 1;
+
+    memcpy(&nativeError,teb+0x68,4);
+
+    if(nativeError!=0)
+        return 1;
+
+    puts("TLS SUCCESS LASTERROR CLEARING PASSED");
+
+    if(!errorCall(errorSet,0x1234,errorResult))
+        return 1;
+
+
 
     puts("EXPANDED NATIVE TEB INITIALIZED");
 
@@ -1107,6 +1183,30 @@ int main() {
     }
 
     
+    
+    if(passed && SavedFrame){
+
+        const bool gsErrorRead=
+            SavedFrame->State.gregs[9]==0x1234;
+
+        uint64_t guestError=0;
+
+        const bool gsErrorWrite=
+            errorCall(errorGet,0,guestError) &&
+            guestError==0x5678;
+
+        puts(gsErrorRead?
+            "FEX GS LASTERROR READ PASSED":
+            "FEX GS LASTERROR READ FAILED");
+
+        puts(gsErrorWrite?
+            "FEX TO SCARLETT LASTERROR PASSED":
+            "FEX TO SCARLETT LASTERROR FAILED");
+
+        passed=passed &&
+            gsErrorRead && gsErrorWrite;
+    }
+
     uint64_t tlsFinal=0;
 
     const bool tlsGuestOK=

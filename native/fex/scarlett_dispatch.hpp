@@ -93,6 +93,11 @@ public:
         const uint64_t arg7 = stackArgument(rsp,2);
         const uint64_t arg8 = stackArgument(rsp,3);
 
+        
+        if(!imports.syncLastErrorFromTeb(memory))
+            throw std::runtime_error(
+                "TEB LastError read failed");
+
         if (!imports.dispatch(
                 address,
                 memory,
@@ -110,6 +115,11 @@ public:
             throw std::runtime_error(
                 "Scarlett import dispatch failed");
         }
+
+        
+        if(!imports.syncLastErrorToTeb(memory))
+            throw std::runtime_error(
+                "TEB LastError write failed");
 
         ++calls;
         return result;
