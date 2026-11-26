@@ -111,7 +111,20 @@ int main() {
         0xFF, 0x15, 0xF4, 0x00, 0x00, 0x00,
         0x48, 0x01, 0xD8,
         0x48, 0x83, 0xC4, 0x48,
-        0xCC
+        
+    // mov r10, [r12]
+    0x4D,0x8B,0x14,0x24,
+
+    // mov [r13], r10
+    0x4D,0x89,0x55,0x00,
+
+    // mov r11, [r13]
+    0x4D,0x8B,0x5D,0x00,
+
+    // mov [r12+8], r11
+    0x4D,0x89,0x5C,0x24,0x08,
+
+    0xCC
     };
 
     memcpy(code, guest, sizeof(guest));
@@ -530,7 +543,51 @@ int main() {
         return 1;
     }
 
+    
+    const auto heapApi=runtime.bind(
+        "api-ms-win-crt-heap-l1-1-0.dll","malloc");
+
+    const auto virtualApi=runtime.bind(
+        "api-ms-win-core-memory-l1-1-0.dll",
+        "VirtualAlloc");
+
+    uint64_t guestHeap=0;
+    uint64_t guestVirtual=0;
+
+    if(!heapApi || !virtualApi)
+        return 1;
+
+    if(!runtime.imports.dispatch(
+        heapApi,runtime.memory,4096,guestHeap)
+        || !guestHeap)
+        return 1;
+
+    if(!runtime.imports.dispatch(
+        virtualApi,runtime.memory,
+        0,guestVirtual,4096,0x3000,4)
+        || !guestVirtual)
+        return 1;
+
+    constexpr uint64_t guestMagic=
+        0xA11E0503C1234567ULL;
+
+    std::array<uint8_t,8> seed{};
+    memcpy(seed.data(),&guestMagic,8);
+
+    if(runtime.memory.write(guestHeap,seed)
+        !=genesis::GuestMemory64::Fault::none)
+        return 1;
+
+    printf("Guest heap: 0x%llx\n",
+        (unsigned long long)guestHeap);
+
+    printf("Guest virtual memory: 0x%llx\n",
+        (unsigned long long)guestVirtual);
+
     FEXCore::Core::CPUState initial{};
+    initial.gregs[12]=guestHeap;
+    initial.gregs[13]=guestVirtual;
+
 
     initial.rip = CodeBase;
     initial.gs_cached = tebAddress;
@@ -713,7 +770,78 @@ int main() {
         }
     }
 
+    
+    if(passed){
+        std::array<uint8_t,8> heapResult{};
+        std::array<uint8_t,8> virtualResult{};
+
+        using MemoryFault=genesis::GuestMemory64::Fault;
+
+        const bool heapRead=
+            runtime.memory.read(
+                guestHeap+8,heapResult)==MemoryFault::none;
+
+        const bool virtualRead=
+            runtime.memory.read(
+                guestVirtual,virtualResult)==MemoryFault::none;
+
+        uint64_t heapValue=0;
+        uint64_t virtualValue=0;
+
+        memcpy(&heapValue,heapResult.data(),8);
+        memcpy(&virtualValue,virtualResult.data(),8);
+
+        const bool heapOK=
+            heapRead && heapValue==guestMagic;
+
+        const bool virtualOK=
+            virtualRead && virtualValue==guestMagic;
+
+        puts(heapOK?
+            "FEX TRANSLATED HEAP ACCESS PASSED":
+            "FEX TRANSLATED HEAP ACCESS FAILED");
+
+        puts(virtualOK?
+            "FEX TRANSLATED VIRTUAL ACCESS PASSED":
+            "FEX TRANSLATED VIRTUAL ACCESS FAILED");
+
+        passed=passed && heapOK && virtualOK;
+    }
+
     ctx->DestroyThread(thread);
+
+    {
+        uint64_t result=0;
+
+        auto freeApi=runtime.bind(
+            "api-ms-win-crt-heap-l1-1-0.dll","free");
+
+        auto releaseApi=runtime.bind(
+            "api-ms-win-core-memory-l1-1-0.dll",
+            "VirtualFree");
+
+        const bool heapReleased=
+            freeApi && runtime.imports.dispatch(
+                freeApi,runtime.memory,guestHeap,result);
+
+        const bool virtualReleased=
+            releaseApi && runtime.imports.dispatch(
+                releaseApi,runtime.memory,
+                guestVirtual,result,0,0x8000)
+            && result==1;
+
+        const bool clean=
+            heapReleased && virtualReleased &&
+            runtime.memory.directHeapCount()==0 &&
+            runtime.memory.nativeReservationCount()==0;
+
+        puts(clean?
+            "TRANSLATED MEMORY CLEANUP PASSED":
+            "TRANSLATED MEMORY CLEANUP FAILED");
+
+        passed=passed && clean;
+    }
+
     munmap(callretMapping, callretMappingSize);
 
     ctx.reset();
